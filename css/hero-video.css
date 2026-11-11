@@ -1,0 +1,35 @@
+/* Scroll-video hero - approved "Variant 5" look (shared by all 19 language homepages).
+   Applies only while the scroll-controlled video is active (.hero2.is-scrub). Visitors who get the static poster
+   (reduced motion, Save-Data, no JS, no video support) keep the original hero design unchanged.
+   Driven by js/hero-scrub.js, which sets three custom properties on <body>:
+     --sand   0 -> 1 over the last 20% of the hero's scroll (eased): strength of the original sand fade
+     --shade  adaptive gradient strength behind the text, from the brightness of the frame on screen
+   Revert: remove the <link> to this file from the 19 homepages (see backup notes). */
+
+@property --sand  { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --shade { syntax: '<number>'; inherits: true; initial-value: 0; }
+body { transition: --shade .6s ease; }
+
+/* Original sand fade and transition into the next section - unchanged gradient, now rising only at the end */
+.hero2.is-scrub .hero2-ov { opacity: var(--sand); pointer-events: none; }
+
+/* Adaptive gradient: Variant 5's feathered ellipse (48% x 30% at 28% 62%), soft shaded tone for white type */
+.hero2.is-scrub .hero2-scrim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(48% 30% at 28% 62%, rgba(15,11,8, var(--shade)) 0%, rgba(15,11,8, calc(var(--shade) * .72)) 38%,
+    rgba(15,11,8, calc(var(--shade) * .3)) 66%, rgba(15,11,8, 0) 100%);
+}
+[dir="rtl"] .hero2.is-scrub .hero2-scrim {
+  background: radial-gradient(48% 30% at 72% 62%, rgba(15,11,8, var(--shade)) 0%, rgba(15,11,8, calc(var(--shade) * .72)) 38%,
+    rgba(15,11,8, calc(var(--shade) * .3)) 66%, rgba(15,11,8, 0) 100%);
+}
+
+/* White typography, no glow; a very soft shadow fades in only with the sand fade at the end of the hero */
+.hero2.is-scrub .hero2-lede,
+.hero2.is-scrub .hero2-sub,
+.hero2.is-scrub .hero2-cta .secondary {
+  color: #FFFFFF;
+  text-shadow: 0 1px 2px rgba(15,11,8, calc(var(--sand) * .32)), 0 1px 14px rgba(15,11,8, calc(var(--sand) * .30));
+}
+.hero2.is-scrub .hero2-cta .secondary { border-color: rgba(255,255,255,.55); }
+.hero2.is-scrub .hero2-cta .secondary:hover { border-color: #FFFFFF; }
