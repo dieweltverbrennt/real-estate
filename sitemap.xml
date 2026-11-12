@@ -2878,6 +2878,33 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://bitoqu.com/cookies/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://bitoqu.com/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://bitoqu.com/ru/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://bitoqu.com/tr/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://bitoqu.com/cookies/"/>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://bitoqu.com/ru/cookies/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://bitoqu.com/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://bitoqu.com/ru/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://bitoqu.com/tr/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://bitoqu.com/cookies/"/>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://bitoqu.com/tr/cookies/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://bitoqu.com/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://bitoqu.com/ru/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://bitoqu.com/tr/cookies/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://bitoqu.com/cookies/"/>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://bitoqu.com/id/investment-case-studies/</loc>
     <xhtml:link rel="alternate" hreflang="id" href="https://bitoqu.com/id/investment-case-studies/"/>
     <xhtml:link rel="alternate" hreflang="de" href="https://bitoqu.com/de/investment-case-studies/"/>

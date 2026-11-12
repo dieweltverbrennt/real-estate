@@ -9,12 +9,12 @@
    The video never plays on its own: only currentTime is set, one seek at a time. Only original frames are
    shown - nothing is generated, blended or sharpened.
    Hero look (approved "Variant 5", styles in css/hero-video.css): the original sand fade rises only over the last
-   20% of the hero's scroll (--sand), and a soft adaptive gradient behind the white text (--shade) follows how bright
+   20% of the hero's scroll (--hero-sand), and a soft adaptive gradient behind the white text (--shade) follows how bright
    the frame behind the text is. The top headings (header over the hero) follow the same principle: an eased ink/white
    tone per zone (--hb brand, --hn navigation) and a per-heading feathered shade, no light glow. The secondary hero
-   button's colour follows --sand in CSS (no sampling).
+   button's colour follows --hero-sand in CSS (no sampling).
    The header's video read runs outside the seek loop (own task, at most every 150 ms, GPU canvas).
-   Touch devices: --sand/--shade are set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
+   Touch devices: --hero-sand/--shade are set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
    (mobile CSS block).
    Backups of earlier versions: see the RESTORE notes in the backup folders. */
 (function () {
@@ -72,10 +72,14 @@
   // ---- hero look: sand fade at the end of the hero + adaptive gradient behind the text
   var SAND_FROM = 0.8;                             // sand fade rises over the last 20% of the hero's scroll
   var body = document.body, textBlock = hero.querySelector('.hero2-in'), sand = -1;
-  // Touch devices (same query as the mobile block in css/hero-video.css). There --sand/--shade are set on the hero
+  // Touch devices (same query as the mobile block in css/hero-video.css). There --hero-sand/--shade are set on the hero
   // itself, so a change restyles only the hero (on <body> it restyles the whole page); desktop keeps <body>.
   var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
-  var varHost = MOBILE ? hero : body;
+  var varHost = hero;
+  // Touch devices only: the floating WhatsApp button (.wa-fab) stays hidden while the video is in progress (.is-playing
+  // on the hero, see the touch block in css/hero-video.css) and returns once the final frame has been painted.
+  function fabHold(on) { if (MOBILE) hero.classList.toggle('is-playing', on); }
+  fabHold(true);
   var scrim = document.createElement('div');       // decorative layer for the adaptive gradient (css/hero-video.css)
   scrim.className = 'hero2-scrim'; scrim.setAttribute('aria-hidden', 'true');
   var ov = hero.querySelector('.hero2-ov');
@@ -86,7 +90,7 @@
     var s = smoothstep((progress() - SAND_FROM) / (1 - SAND_FROM));
     if (s === sand) return;
     var big = sand < 0 || Math.abs(s - sand) > 0.02 || s === 0 || s === 1;
-    sand = s; varHost.style.setProperty('--sand', s.toFixed(4));
+    sand = s; varHost.style.setProperty('--hero-sand', s.toFixed(4));
     if (big) updateShade();                        // the sand fade also brightens what is behind the text
   }
   function fadeAt(y) {                             // sand fade opacity at a height of the hero (0 top, 1 bottom)
@@ -124,12 +128,14 @@
   function pump() {
     if (!ready || target === shown || busy || video.seeking) return;
     shown = target; busy = true;
+    if (target !== U[LX]) fabHold(true);
     video.currentTime = (target + 0.3) / FPS;    // aim slightly past the frame start (never the previous frame)
   }
   video.addEventListener('seeked', function () {
     if (!ready) { start(); return; }
     requestAnimationFrame(function () {
       busy = false;
+      if (shown === U[LX]) fabHold(false);        // final frame is on screen: the floating button may show again
       updateShade(); schedule(); toneLater();     // the next seek is not held up by the header read (it runs in its own task)
     });
   });
@@ -195,7 +201,7 @@
 
   // ---- adaptive tone for the top headings (transparent header over the hero).
   // The same principle as the main heading. What is behind each zone is sampled on every displayed frame (video plus
-  // the sand fade). (The secondary hero button needs no sampling: its colour follows --sand in css/hero-video.css.)
+  // the sand fade). (The secondary hero button needs no sampling: its colour follows --hero-sand in css/hero-video.css.)
   // Each zone gets a tone from 0 (ink) to 1 (white), chosen by which colour has more contrast against
   // what is behind it. The tone never switches: it glides (eased, ~0.5 s) so the text passes the in-between grey only
   // briefly. Behind white text, each element gets its own feathered ellipse of the same soft shade as the main
@@ -422,6 +428,7 @@
       inView = entries[0].isIntersecting;
       // when the hero leaves the screen, put the camera where the scroll is (no glide needed off-screen)
       if (!inView && ready) { pos = goal = restGoal = Math.round(progress() * LX); vel = 0; target = U[pos]; pump(); }
+      if (!inView) fabHold(false);                // video off screen: nothing is playing for the visitor
       schedule();
     }).observe(hero);
   }
