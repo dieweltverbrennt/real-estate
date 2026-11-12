@@ -10,7 +10,12 @@
    shown - nothing is generated, blended or sharpened.
    Hero look (approved "Variant 5", styles in css/hero-video.css): the original sand fade rises only over the last
    20% of the hero's scroll (--sand), and a soft adaptive gradient behind the white text (--shade) follows how bright
-   the frame behind the text is. Backups of earlier versions: see the RESTORE notes in the backup folders. */
+   the frame behind the text is. The top headings (header over the hero) follow the same principle: an eased ink/white
+   tone per zone (--hb brand, --hn navigation) and a per-heading feathered shade, no light glow. The secondary hero
+   button's colour follows --sand in CSS (no sampling).
+   Touch devices: --sand/--shade are set on the hero (not <body>); the header's video read runs outside the seek loop
+   (own task, at most every 150 ms, GPU canvas); the stage is sized for the toolbar-hidden viewport (mobile CSS block).
+   Backups of earlier versions: see the RESTORE notes in the backup folders. */
 (function () {
   'use strict';
   var hero = document.getElementById('hero');
@@ -66,6 +71,10 @@
   // ---- hero look: sand fade at the end of the hero + adaptive gradient behind the text
   var SAND_FROM = 0.8;                             // sand fade rises over the last 20% of the hero's scroll
   var body = document.body, textBlock = hero.querySelector('.hero2-in'), sand = -1;
+  // Touch devices (same query as the mobile block in css/hero-video.css). There --sand/--shade are set on the hero
+  // itself, so a change restyles only the hero (on <body> it restyles the whole page); desktop keeps <body>.
+  var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
+  var varHost = MOBILE ? hero : body;
   var scrim = document.createElement('div');       // decorative layer for the adaptive gradient (css/hero-video.css)
   scrim.className = 'hero2-scrim'; scrim.setAttribute('aria-hidden', 'true');
   var ov = hero.querySelector('.hero2-ov');
@@ -76,7 +85,7 @@
     var s = smoothstep((progress() - SAND_FROM) / (1 - SAND_FROM));
     if (s === sand) return;
     var big = sand < 0 || Math.abs(s - sand) > 0.02 || s === 0 || s === 1;
-    sand = s; body.style.setProperty('--sand', s.toFixed(4));
+    sand = s; varHost.style.setProperty('--sand', s.toFixed(4));
     if (big) updateShade();                        // the sand fade also brightens what is behind the text
   }
   function fadeAt(y) {                             // sand fade opacity at a height of the hero (0 top, 1 bottom)
@@ -106,7 +115,7 @@
     // final transition (bright sand + white surf behind the text)
     var cap = 0.5 + 0.15 * sd, aim = 135 - 25 * sd;
     var shade = Math.max(0, Math.min(cap, (eff - aim) / (eff - 10)));
-    body.style.setProperty('--shade', shade.toFixed(3));
+    varHost.style.setProperty('--shade', shade.toFixed(3));
   }
 
   // ---- seek pipeline: one seek at a time; the next one only after the decoded frame has been painted
@@ -118,7 +127,11 @@
   }
   video.addEventListener('seeked', function () {
     if (!ready) { start(); return; }
-    requestAnimationFrame(function () { busy = false; tone(); updateShade(); schedule(); });
+    requestAnimationFrame(function () {
+      busy = false;
+      if (MOBILE) { updateShade(); schedule(); toneLater(); }   // mobile: the next seek is not held up by the header read
+      else { tone(); updateShade(); schedule(); }
+    });
   });
 
   // ---- cinematic camera
@@ -180,34 +193,193 @@
     schedule();
   }
 
-  // Header text tone: sample the strip of the current frame that sits behind the
-  // (transparent) header and switch the header to light text when it is dark.
+  // ---- adaptive tone for the top headings (transparent header over the hero).
+  // The same principle as the main heading. What is behind each zone is sampled on every displayed frame (video plus
+  // the sand fade). (The secondary hero button needs no sampling: its colour follows --sand in css/hero-video.css.)
+  // Each zone gets a tone from 0 (ink) to 1 (white), chosen by which colour has more contrast against
+  // what is behind it. The tone never switches: it glides (eased, ~0.5 s) so the text passes the in-between grey only
+  // briefly. Behind white text, each element gets its own feathered ellipse of the same soft shade as the main
+  // heading, as strong as the brightest part behind it needs (never anything behind dark text: no glow, no patches).
   var header = document.getElementById('header');
+  var HC = 96, HRW = 6;                                     // sample grid behind a zone
   var cvs = document.createElement('canvas');
-  cvs.width = 16; cvs.height = 2;
+  cvs.width = HC; cvs.height = HRW;
   var ctx = null;
-  try { ctx = cvs.getContext('2d', { willReadFrequently: true }); } catch (e) {}
-  var dark = false;
-  function tone() {
-    if (!ctx || !header || !video.videoWidth || header.classList.contains('is-solid')) return;
-    var w = stage.clientWidth, h = stage.clientHeight;
-    var s = Math.max(w / video.videoWidth, h / video.videoHeight); // object-fit: cover, centred
+  // mobile: GPU-backed canvas - the scaling happens on the GPU and only the 96x6 result is read back to the CPU
+  try { ctx = cvs.getContext('2d', { willReadFrequently: !MOBILE }); } catch (e) {}
+  var TONE_S = 0.5, SHADE_TAU = 0.12, SMOOTH_TAU = 0.06;   // seconds
+  var DWELL_MS = 120;                                      // a new tone must hold this long before the text moves
+  var H_AIM = 128, H_CAP = 0.42, H_MARGIN = 1.25;          // shade target / limit, hysteresis (contrast ratio)
+  var Y_INK = relY(0x22) * 0.2126 + relY(0x1E) * 0.7152 + relY(0x19) * 0.0722;
+  var zones = [], scrims = [], hlive = false, toneRaf = 0, hraf = 0, hlast = 0, recheck = 0;
+  function addScrim(cls, parent, before) {                 // decorative layer for a zone's feathered shade
+    var el = document.createElement('div');
+    el.className = cls; el.setAttribute('aria-hidden', 'true');
+    parent.insertBefore(el, before); scrims.push(el);
+    return el;
+  }
+  if (ctx) {
+    if (header) {
+      header.classList.add('hdr-adapt'); header.classList.remove('on-dark');
+      var hs = addScrim('hdr-scrim', header, header.firstChild);
+      zones.push({ prop: '--hb', area: 'header', root: header, sel: '.brand', host: header, origin: header, scrim: hs },
+        { prop: '--hn', area: 'header', root: header, sel: '.navlink, .navdrop-t, .langdrop-t', host: header, origin: header, scrim: hs });
+    }
+    zones.forEach(function (z) { z.p = 0; z.t = 0; z.white = false; z.items = []; z.lastT = ''; });
+  }
+  // Header and heading boxes (relative to the header) change only with size or fonts - measure them then, not per frame.
+  var geo = null;
+  function measure() {
+    var hr = header.getBoundingClientRect();
+    geo = { w: hr.width, h: hr.height, rects: zones.map(function (z) {
+      return Array.prototype.map.call(z.root.querySelectorAll(z.sel), function (el) {
+        var r = el.getBoundingClientRect();
+        return r.width && r.height ? { left: r.left - hr.left, right: r.right - hr.left, top: r.top - hr.top, width: r.width, height: r.height } : null;
+      });
+    }) };
+  }
+  if (zones.length) {
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function () { geo = null; });
+      ro.observe(header);
+      zones.forEach(function (z) { Array.prototype.forEach.call(z.root.querySelectorAll(z.sel), function (el) { ro.observe(el); }); });
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { geo = null; });
+  }
+  function relY(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function pct(a, q) { a.sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; }
+
+  // Luminance (0-255) on a HC x HRW grid behind a viewport rect, as the visitor sees it: the video frame (object-fit:
+  // cover), lightened by the sand fade, and limestone where the rect is below the stage.
+  function sample(R, sr) {
+    var w = sr.width, h = sr.height;
+    var s = Math.max(w / video.videoWidth, h / video.videoHeight);
     var sx = (video.videoWidth * s - w) / 2 / s, sy = (video.videoHeight * s - h) / 2 / s;
-    var st = stage.getBoundingClientRect().top;                     // stage moves up after the pin ends
-    var top = Math.max(0, -st), band = Math.max(1, header.offsetHeight);
-    var d;
-    try {
-      ctx.drawImage(video, sx, sy + top / s, w / s, band / s, 0, 0, 16, 2);
-      d = ctx.getImageData(0, 0, 16, 2).data;
-    } catch (e) { ctx = null; return; }
-    var L = 0;
-    for (var i = 0; i < d.length; i += 4) L += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-    L /= d.length / 4;
-    var next = dark ? L < 140 : L < 115; // hysteresis avoids flicker around the threshold
-    if (next !== dark) { dark = next; header.classList.toggle('on-dark', dark); }
+    var y0 = Math.max(R.top, sr.top), vis = Math.min(R.bottom, sr.bottom) - y0;
+    var rows = vis > 0 ? Math.max(1, Math.round(HRW * vis / R.height)) : 0, d = null;
+    if (rows) {
+      ctx.drawImage(video, sx + (R.left - sr.left) / s, sy + (y0 - sr.top) / s, R.width / s, vis / s, 0, 0, HC, rows);
+      d = ctx.getImageData(0, 0, HC, rows).data;
+    }
+    var lum = [], sd = sand < 0 ? 0 : sand;
+    for (var r = 0; r < HRW; r++) {
+      var y = R.top + (r + 0.5) / HRW * R.height - sr.top, f = y >= h ? 1 : fadeAt(y / h) * sd;
+      for (var c = 0; c < HC; c++) {
+        var L = 233;
+        if (r < rows) { var i = (r * HC + c) * 4; L = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; }
+        lum.push(L * (1 - f) + 233 * f);
+      }
+    }
+    return lum;
   }
 
-  window.addEventListener('resize', function () { tone(); updateSand(); updateShade(); schedule(); }, { passive: true });
+  function tone() {
+    if (!zones.length || !video.videoWidth) return;
+    var now = performance.now();
+    if (hlive && now - hlive < 6) return;                  // seek, scroll and re-check land in one update per frame
+    var dt = hlive ? (now - hlive) / 1000 : 1;
+    hlive = now;
+    if (!geo) measure();
+    var sr = stage.getBoundingClientRect(), solid = header.classList.contains('is-solid'), leaving = sr.top < -1;
+    var R = { left: 0, top: 0, right: geo.w, bottom: geo.h, width: geo.w, height: geo.h };   // fixed header at the top
+    var a = 1 - Math.exp(-dt / SMOOTH_TAU), lum = null, anim = false;
+    try {
+      if (!solid && R.width > 0 && R.height > 0) lum = sample(R, sr);   // one video read per update
+      zones.forEach(function (z, zi) {
+        var rects = geo.rects[zi], pool = [], items = [];
+        for (var k = 0; k < rects.length; k++) {
+          var er = rects[k];
+          if (!er) continue;
+          var it = z.items[k] || { s: 0 };
+          it.x = er.left + er.width / 2; it.y = er.top + er.height / 2; it.w = er.width; it.h = er.height;
+          var aim = 0;
+          if (lum) {
+            var c0 = Math.max(0, Math.floor((er.left - 10) / R.width * HC)), c1 = Math.min(HC - 1, Math.floor((er.right + 10) / R.width * HC));
+            var own = [];
+            for (var rr = 0; rr < HRW; rr++) for (var cc = c0; cc <= c1; cc++) own.push(lum[rr * HC + cc]);
+            pool = pool.concat(own);
+            var p80 = pct(own, 0.8);
+            it.p80 = it.p80 == null || dt >= 1 ? p80 : it.p80 + (p80 - it.p80) * a;
+            aim = Math.max(0, Math.min(H_CAP, (it.p80 - H_AIM) / (it.p80 - 15)));
+          }
+          it.aim = aim; items[k] = it;
+          if (Math.abs(aim - it.s) > 0.002) anim = true;
+        }
+        z.items = items;
+        if (solid) { z.white = false; z.since = 0; return; } // solid header: its own colours
+        if (!pool.length) return;                            // nothing to measure (e.g. hero off screen): keep the tone
+        var p80z = pct(pool, 0.8), p20z = pct(pool, 0.2);
+        z.p80 = z.p80 == null || dt >= 1 ? p80z : z.p80 + (p80z - z.p80) * a;
+        z.p20 = z.p20 == null || dt >= 1 ? p20z : z.p20 + (p20z - z.p20) * a;
+        var cw = 1.05 / (relY(z.p80) + 0.05), cd = (relY(z.p20) + 0.05) / (Y_INK + 0.05);
+        var white = z.white ? cw * H_MARGIN > cd : cw > cd * H_MARGIN;
+        if (leaving && !z.white) white = false;            // hero sliding away: only towards ink (the next section)
+        if (z.first === undefined) {                       // first frame: unbiased choice, no fade-in
+          z.first = false; white = cw >= cd; z.white = white; z.p = z.t = white ? 1 : 0;
+        }
+        if (white === z.white) { z.since = 0; return; }
+        if (!z.since) z.since = now;                       // a new tone must hold briefly: passing glare is ignored
+        if (now - z.since >= DWELL_MS) { z.white = white; z.since = 0; }
+        else recheckIn(DWELL_MS - (now - z.since));
+      });
+    } catch (e) { zones = []; return; }                    // canvas unusable (e.g. tainted): keep the CSS defaults
+    zones.forEach(function (z) { if (z.p !== (z.white ? 1 : 0) || !z.lastT) anim = true; });
+    if (anim && !hraf) hraf = requestAnimationFrame(hdrAnim);
+  }
+  function hdrAnim(now) {
+    hraf = 0;
+    var dt = hlast ? Math.min(0.1, (now - hlast) / 1000) : 0.016; hlast = now;
+    var busy = false, grads = scrims.map(function () { return []; });
+    zones.forEach(function (z) {
+      var goal = z.white ? 1 : 0, g = grads[scrims.indexOf(z.scrim)], k = 1 - Math.exp(-dt / SHADE_TAU);
+      if (z.p !== goal) { z.p = goal > z.p ? Math.min(goal, z.p + dt / TONE_S) : Math.max(goal, z.p - dt / TONE_S); busy = true; }
+      z.t = z.p * z.p * z.p * (z.p * (z.p * 6 - 15) + 10);   // smootherstep: gentle at both ends, brief in the middle
+      var tv = z.t.toFixed(3);
+      if (tv !== z.lastT) { z.lastT = tv; z.host.style.setProperty(z.prop, tv); }
+      z.items.forEach(function (it) {
+        if (!it) return;
+        var d = it.aim - it.s;
+        if (Math.abs(d) > 0.002) { it.s += d * k; busy = true; } else it.s = it.aim;
+        var S = it.s * z.t;                                  // shade only as far as the text has turned white
+        if (S < 0.004) return;
+        var rx = it.w * 0.62 + 26, ry = it.h * 0.5 + 18;
+        g.push('radial-gradient(' + rx.toFixed(1) + 'px ' + ry.toFixed(1) + 'px at ' + it.x.toFixed(1) + 'px ' + it.y.toFixed(1) + 'px,' +
+          'rgba(15,11,8,' + S.toFixed(3) + ') 0%,rgba(15,11,8,' + (S * 0.72).toFixed(3) + ') 38%,rgba(15,11,8,' +
+          (S * 0.3).toFixed(3) + ') 66%,rgba(15,11,8,0) 100%)');
+      });
+    });
+    scrims.forEach(function (el, i) {
+      var bg = grads[i].length ? grads[i].join(',') : 'none';
+      if (bg !== el.__bg) { el.__bg = bg; el.style.backgroundImage = bg; }
+    });
+    if (busy) hraf = requestAnimationFrame(hdrAnim); else hlast = 0;
+  }
+  var recheckAt = 0;
+  function recheckIn(ms) {                                 // one shared timer, always for the soonest request
+    var at = performance.now() + ms + 5;
+    if (recheck && at >= recheckAt) return;
+    clearTimeout(recheck); recheckAt = at;
+    recheck = setTimeout(function () { recheck = 0; toneSoon(); }, ms + 5);
+  }
+  function toneSoon() { if (MOBILE) return toneLater(); if (!toneRaf) toneRaf = requestAnimationFrame(function () { toneRaf = 0; tone(); }); }
+  // Mobile: header read in a separate task, at most every 150 ms (the header waits 120 ms before changing and then
+  // glides for 0.5 s, so reading it on every video frame adds no visible precision - only work in the seek loop).
+  var toneTimer = 0, toneLast = 0, TONE_GAP = 150;
+  function toneLater() {
+    if (toneTimer) return;
+    toneTimer = setTimeout(function () { toneTimer = 0; toneLast = performance.now(); tone(); }, Math.max(0, toneLast + TONE_GAP - performance.now()));
+  }
+  // While the hero is pinned the strip behind the header only changes with the video frame ('seeked' re-samples it),
+  // so scrolling needs a re-sample only while the hero slides away, and once when that or the solid header changes.
+  var lastSlide = false, lastSolid = false;
+  function toneOnScroll() {
+    if (!zones.length) return;
+    var slide = stage.getBoundingClientRect().top < -1, solid = header.classList.contains('is-solid');
+    if (slide || slide !== lastSlide || solid !== lastSolid) toneSoon();
+    lastSlide = slide; lastSolid = solid;
+  }
+
+  window.addEventListener('resize', function () { geo = null; tone(); updateSand(); updateShade(); schedule(); }, { passive: true });
   video.addEventListener('loadeddata', start);
   video.addEventListener('loadedmetadata', function () {
     // Some mobile browsers stop at metadata; a tiny seek makes them decode frame 0.
@@ -239,7 +411,7 @@
 
   window.addEventListener('scroll', function () {
     lastScrollT = performance.now(); restGoal = null;
-    updateSand();
+    toneOnScroll(); updateSand();
     boost(); schedule();
   }, { passive: true });
 
