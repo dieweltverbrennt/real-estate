@@ -1,0 +1,46 @@
+/* Page scrollbar - "Minimal Bronze" (homepages, desktop with mouse/trackpad only).
+   The browser's own scrollbar is hidden and replaced by a hairline bronze track with a small thumb at the right edge.
+   Scrolling itself stays native (wheel, trackpad, keyboard); the bar only shows the position and can be dragged/clicked.
+   html.bq-sb is set in <head> (before first paint, so the page never changes width) only on desktop computers: the device
+   must not identify as a phone/tablet (user agent, client hints, iPad-as-Mac) and the primary pointer must hover and be
+   precise; phones and tablets keep their native scrolling and indicator. Without JavaScript the native
+   scrollbar stays. The thumb follows the scroll with a CSS scroll-driven animation (no JS while scrolling); browsers
+   without it get one transform per frame from js/site-scrollbar.js. */
+
+/* Safety net: the native scrollbar is only hidden, and the custom bar only shown, where the primary pointer is a mouse
+   or trackpad. On touch devices neither can take effect, even if html.bq-sb were set. */
+@media (hover: hover) and (pointer: fine) {
+  html.bq-sb { scrollbar-width: none; }                                  /* Chrome/Edge 121+, Firefox */
+  html.bq-sb::-webkit-scrollbar { display: none; width: 0; height: 0; }  /* Safari, older Chromium */
+}
+@media not all and (hover: hover) and (pointer: fine) { .bq-sb-bar { display: none !important; } }
+html.bq-sb-drag, html.bq-sb-drag * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
+
+.bq-sb-bar {
+  --sb-top: 100px; --sb-bot: 100px; --sb-hit: 18px; --sb-x: 9px;
+  --sb-rail: rgba(122, 92, 55, .30); --sb-thumb: #8C6A3F;                /* bronze over light backgrounds */
+  position: fixed; z-index: 70; top: 0; right: 0; bottom: 0; width: 0; pointer-events: none;
+  opacity: 0; transition: opacity .6s ease;
+}
+.bq-sb-bar.is-ready { opacity: 1; }
+.bq-sb-bar.is-dark { --sb-rail: rgba(226, 205, 165, .38); --sb-thumb: #D9BC8A; } /* champagne over the dark hero video */
+.bq-sb-track { position: absolute; z-index: 1; top: var(--sb-top); bottom: var(--sb-bot); right: 0; width: var(--sb-hit);
+  pointer-events: auto; cursor: pointer; touch-action: none; }
+.bq-sb-rail { position: absolute; top: 0; bottom: 0; right: var(--sb-x); width: 1px; background: var(--sb-rail); transition: background-color .5s; }
+.bq-sb-run { position: absolute; z-index: 2; top: var(--sb-top); right: 0; width: var(--sb-hit); height: 0; pointer-events: none; }
+.bq-sb-thumb { position: absolute; top: 0; right: 0; width: var(--sb-hit); height: var(--sb-th, 56px);
+  pointer-events: auto; cursor: grab; touch-action: none; }
+.bq-sb-thumb i { position: absolute; top: 0; bottom: 0; right: calc(var(--sb-x) - .5px); width: 2px; border-radius: 2px;
+  background: linear-gradient(to bottom, var(--sb-thumb), color-mix(in srgb, var(--sb-thumb) 78%, #fff));
+  transition: background-color .5s, width .3s, right .3s; }
+.bq-sb-bar.is-dark .bq-sb-thumb i { box-shadow: 0 0 0 .5px rgba(20, 17, 14, .35); }   /* stays defined over bright frames */
+.bq-sb-track:hover .bq-sb-rail { background: color-mix(in srgb, var(--sb-rail) 100%, var(--sb-thumb) 35%); }
+.bq-sb-track:hover ~ .bq-sb-run .bq-sb-thumb i, .bq-sb-thumb:hover i, html.bq-sb-drag .bq-sb-thumb i { width: 3px; right: calc(var(--sb-x) - 1px); }
+
+@supports (animation-timeline: scroll()) {
+  .bq-sb-run { animation: bq-sb-move linear both; animation-timeline: scroll(root block); }
+}
+@keyframes bq-sb-move { from { transform: translateY(0); } to { transform: translateY(100%); } }   /* no variables: compositor-friendly */
+
+@media (prefers-reduced-motion: reduce) { .bq-sb-bar, .bq-sb-bar * { transition: none !important; } }
+@media print { .bq-sb-bar { display: none; } }

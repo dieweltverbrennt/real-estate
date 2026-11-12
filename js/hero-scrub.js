@@ -13,8 +13,9 @@
    the frame behind the text is. The top headings (header over the hero) follow the same principle: an eased ink/white
    tone per zone (--hb brand, --hn navigation) and a per-heading feathered shade, no light glow. The secondary hero
    button's colour follows --sand in CSS (no sampling).
-   Touch devices: --sand/--shade are set on the hero (not <body>); the header's video read runs outside the seek loop
-   (own task, at most every 150 ms, GPU canvas); the stage is sized for the toolbar-hidden viewport (mobile CSS block).
+   The header's video read runs outside the seek loop (own task, at most every 150 ms, GPU canvas).
+   Touch devices: --sand/--shade are set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
+   (mobile CSS block).
    Backups of earlier versions: see the RESTORE notes in the backup folders. */
 (function () {
   'use strict';
@@ -129,8 +130,7 @@
     if (!ready) { start(); return; }
     requestAnimationFrame(function () {
       busy = false;
-      if (MOBILE) { updateShade(); schedule(); toneLater(); }   // mobile: the next seek is not held up by the header read
-      else { tone(); updateShade(); schedule(); }
+      updateShade(); schedule(); toneLater();     // the next seek is not held up by the header read (it runs in its own task)
     });
   });
 
@@ -205,13 +205,14 @@
   var cvs = document.createElement('canvas');
   cvs.width = HC; cvs.height = HRW;
   var ctx = null;
-  // mobile: GPU-backed canvas - the scaling happens on the GPU and only the 96x6 result is read back to the CPU
-  try { ctx = cvs.getContext('2d', { willReadFrequently: !MOBILE }); } catch (e) {}
+  // GPU-backed canvas - the scaling happens on the GPU and only the 96x6 result is read back to the CPU (a CPU canvas
+  // would copy the whole decoded 2560x1440 frame back first: ~10-30 ms per read on desktop)
+  try { ctx = cvs.getContext('2d', { willReadFrequently: false }); } catch (e) {}
   var TONE_S = 0.5, SHADE_TAU = 0.12, SMOOTH_TAU = 0.06;   // seconds
   var DWELL_MS = 120;                                      // a new tone must hold this long before the text moves
   var H_AIM = 128, H_CAP = 0.42, H_MARGIN = 1.25;          // shade target / limit, hysteresis (contrast ratio)
   var Y_INK = relY(0x22) * 0.2126 + relY(0x1E) * 0.7152 + relY(0x19) * 0.0722;
-  var zones = [], scrims = [], hlive = false, toneRaf = 0, hraf = 0, hlast = 0, recheck = 0;
+  var zones = [], scrims = [], hlive = false, hraf = 0, hlast = 0, recheck = 0;
   function addScrim(cls, parent, before) {                 // decorative layer for a zone's feathered shade
     var el = document.createElement('div');
     el.className = cls; el.setAttribute('aria-hidden', 'true');
@@ -361,9 +362,10 @@
     clearTimeout(recheck); recheckAt = at;
     recheck = setTimeout(function () { recheck = 0; toneSoon(); }, ms + 5);
   }
-  function toneSoon() { if (MOBILE) return toneLater(); if (!toneRaf) toneRaf = requestAnimationFrame(function () { toneRaf = 0; tone(); }); }
-  // Mobile: header read in a separate task, at most every 150 ms (the header waits 120 ms before changing and then
-  // glides for 0.5 s, so reading it on every video frame adds no visible precision - only work in the seek loop).
+  function toneSoon() { toneLater(); }
+  // Header read in a separate task, at most every 150 ms (the header waits 120 ms before changing and then glides for
+  // 0.5 s, so reading it on every video frame adds no visible precision - only work in the seek loop). tone() reads the
+  // frame on screen when it runs, and a seek after a read schedules a new one, so the last frame is always sampled.
   var toneTimer = 0, toneLast = 0, TONE_GAP = 150;
   function toneLater() {
     if (toneTimer) return;
