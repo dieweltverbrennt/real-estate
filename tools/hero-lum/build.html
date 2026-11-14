@@ -1,0 +1,73 @@
+<!doctype html><meta charset="utf-8"><title>Hero luminance table builder</title>
+<video id="v" muted playsinline preload="auto"></video>
+<script>
+// Builds the header luminance table for one hero video source (read by js/hero-scrub.js, "Header luminance table").
+// Driven by tools/hero-lum/build.mjs in headless Chrome; see tools/hero-lum/README.md.
+// Layout (greyscale WebP, width 160): for each unique frame u (frames 5k+1 repeat 5k and are skipped):
+//   band   rows u*24 .. u*24+23                     : mean luminance of video rows 0-383 in 16x16 px cells (160 x 24)
+//   coarse at x (u%8)*20, y 24*N + floor(u/8)*11     : video rows 384-1439 in 128x96 px cells (20 x 11)
+// Luminance per pixel = 0.2126 R + 0.7152 G + 0.0722 B of the frame as the browser decodes it (same as the runtime sampler).
+// These constants must match LUM_* in js/hero-scrub.js.
+var v = document.getElementById('v'), FPS = 30, q = new URLSearchParams(location.search);
+v.src = q.get('src');
+var BK = 16, BAND = 384, AKX = 128, AKY = 96, W = 160, BH = 24, AW = 20, AH = 11, PER_ROW = 8;
+function seek(f) { return new Promise(function (res) { v.addEventListener('seeked', function h() { v.removeEventListener('seeked', h); requestAnimationFrame(function () { res(); }); }); v.currentTime = (f + 0.3) / FPS; }); }
+function b64(u8) { var s = ''; for (var i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+var OUT = {};
+window.build = async function (quality) {
+  while (!(v.duration > 0 && v.buffered.length && v.buffered.end(v.buffered.length - 1) >= v.duration - 0.05)) await new Promise(r => setTimeout(r, 50));
+  var VW = v.videoWidth, VH = v.videoHeight, frames = Math.round(v.duration * FPS);
+  if (VW !== 2560 || VH !== 1440 || frames !== 292) throw new Error('unexpected clip ' + VW + 'x' + VH + ' ' + frames + ' frames (the table layout and js/hero-scrub.js expect 2560x1440, 292 frames)');
+  var U = []; for (var f = 0; f < frames; f++) if (f % 5 !== 1) U.push(f);
+  var N = U.length, H = BH * N + AH * Math.ceil(N / PER_ROW), atlas = new Uint8Array(W * H);
+  var big = document.createElement('canvas'); big.width = VW; big.height = VH;
+  var bx = big.getContext('2d', { willReadFrequently: false });
+  var repeatDiff = 0;
+  for (var u = 0; u < N; u++) {
+    await seek(U[u]); bx.drawImage(v, 0, 0);
+    var d = bx.getImageData(0, 0, VW, VH).data, band = new Float64Array(W * BH), away = new Float64Array(AW * AH);
+    for (var y = 0; y < VH; y++) {
+      var o = y * VW * 4, inBand = y < BAND, row = inBand ? ((y / BK) | 0) * W : (((y - BAND) / AKY) | 0) * AW;
+      for (var x = 0; x < VW; x++, o += 4) {
+        var L = 0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2];
+        if (inBand) band[row + ((x / BK) | 0)] += L; else away[row + ((x / AKX) | 0)] += L;
+      }
+    }
+    for (var i = 0; i < W * BH; i++) atlas[u * BH * W + i] = Math.round(band[i] / (BK * BK));
+    var ax = (u % PER_ROW) * AW, ay = BH * N + Math.floor(u / PER_ROW) * AH;
+    for (var r = 0; r < AH; r++) for (var c = 0; c < AW; c++) atlas[(ay + r) * W + ax + c] = Math.round(away[r * AW + c] / (AKX * AKY));
+  }
+  // sanity: a skipped repeat frame (5k+1) really equals 5k (mean abs difference of the green channel, top 16 rows)
+  await seek(6); bx.drawImage(v, 0, 0); var d6 = bx.getImageData(0, 0, VW, 16).data; await seek(5); bx.drawImage(v, 0, 0); var d5 = bx.getImageData(0, 0, VW, 16).data;
+  for (var i = 0; i < d5.length; i += 4) repeatDiff += Math.abs(d5[i + 1] - d6[i + 1]); repeatDiff /= d5.length / 4;
+  // encode as WebP (greyscale in RGB)
+  var c = document.createElement('canvas'); c.width = W; c.height = H;
+  var cx = c.getContext('2d', { willReadFrequently: true }), id = cx.createImageData(W, H);
+  for (var i = 0; i < W * H; i++) { id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = atlas[i]; id.data[i * 4 + 3] = 255; }
+  cx.putImageData(id, 0, 0);
+  var blob = await new Promise(r => c.toBlob(r, 'image/webp', quality));
+  OUT = { atlas: atlas, file: new Uint8Array(await blob.arrayBuffer()) };
+  var self = await readTable(blob);
+  return { W: W, H: H, N: N, size: blob.size, type: blob.type, repeatDiff: +repeatDiff.toFixed(3), duration: v.duration, codecError: compare(self) };
+};
+// Decode a table file the way js/hero-scrub.js does (createImageBitmap from a Blob, drawImage 1:1, luma)
+async function readTable(blob) {
+  var bmp = await createImageBitmap(blob), c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+  var x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0);
+  var px = x.getImageData(0, 0, bmp.width, bmp.height).data, out = new Uint8Array(bmp.width * bmp.height);
+  for (var i = 0; i < out.length; i++) out[i] = Math.round(0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]);
+  return { w: bmp.width, h: bmp.height, lum: out };
+}
+function compare(t) {   // decoded table vs the exact (pre-compression) values just computed from the video
+  if (t.w !== W || t.lum.length !== OUT.atlas.length) return { sameSize: false, w: t.w, h: t.h };
+  var s = 0, mx = 0; for (var i = 0; i < t.lum.length; i++) { var d = Math.abs(t.lum[i] - OUT.atlas[i]); s += d; if (d > mx) mx = d; }
+  return { sameSize: true, meanAbs: +(s / t.lum.length).toFixed(3), maxAbs: mx };
+}
+// --check: compare a table file already in the project with the values computed from the current video
+window.checkTable = async function (url) {
+  var r = await fetch(url, { cache: 'no-store' }); if (!r.ok) return { error: 'HTTP ' + r.status };
+  return compare(await readTable(await r.blob()));
+};
+window.chunk = function (k, o, n) { return b64(OUT[k].subarray(o, Math.min(OUT[k].length, o + n))); };
+window.len = function (k) { return OUT[k].length; };
+</script>

@@ -1,27 +1,62 @@
 /* Scroll-video hero - approved "Variant 5" look (shared by all 19 language homepages).
    Applies only while the scroll-controlled video is active (.hero2.is-scrub). Visitors who get the static poster
    (reduced motion, Save-Data, no JS, no video support) keep the original hero design unchanged.
-   Driven by js/hero-scrub.js, which sets three custom properties on <body>:
+   Driven by js/hero-scrub.js, which sets on the hero:
      --hero-sand   0 -> 1 over the last 20% of the hero's scroll (eased): strength of the original sand fade
-     --shade  adaptive gradient strength behind the text, from the brightness of the frame on screen
+                   (a light haze over 66% -> 78% of the scroll when the Method section rises over the video -
+                   "Horizon Chapter"; the veil behind the Method text then scrolls in with Method itself)
+     and the opacity of .hero2-scrim: adaptive gradient strength behind the text, from the brightness of the frame on screen
    Revert: remove the <link> to this file from the 19 homepages (see backup notes). */
 
 @property --hero-sand  { syntax: '<number>'; inherits: true; initial-value: 0; }
-@property --shade { syntax: '<number>'; inherits: true; initial-value: 0; }
-.hero2.is-scrub { transition: --shade .6s ease; }
 
 /* Original sand fade and transition into the next section - unchanged gradient, now rising only at the end */
 .hero2.is-scrub .hero2-ov { opacity: var(--hero-sand); pointer-events: none; }
 
-/* Adaptive gradient: Variant 5's feathered ellipse (48% x 30% at 28% 62%), soft shaded tone for white type */
+/* Adaptive gradient behind the white type: two feathered ellipses in one layer, drawn once - the heading's (50% x 32% at
+   27% 70%, held at .75 of full strength) and a thin one along the subtitle line (34% x 8.5% at 26% 79.5%), placed where
+   the text actually sits. The strength of the whole layer is its opacity, set by js/hero-scrub.js from the brightness
+   of the frame behind the text (precomputed table): opacity multiplies every stop, and an opacity transition runs on
+   the compositor instead of restyling the hero on every frame. Narrow screens (< 1024px, text across the full width):
+   a wider ellipse and a full-width subtitle line, see below. */
 .hero2.is-scrub .hero2-scrim {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(48% 30% at 28% 62%, rgba(15,11,8, var(--shade)) 0%, rgba(15,11,8, calc(var(--shade) * .72)) 38%,
-    rgba(15,11,8, calc(var(--shade) * .3)) 66%, rgba(15,11,8, 0) 100%);
+  opacity: 0; transition: opacity .6s ease;
+  background:
+    radial-gradient(34% 8.5% at 26% 79.5%, rgba(15,11,8, 1) 0%, rgba(15,11,8, .9) 55%, rgba(15,11,8, .4) 82%, rgba(15,11,8, 0) 100%),
+    radial-gradient(50% 32% at 27% 70%, rgba(15,11,8, .75) 0%, rgba(15,11,8, .645) 45%, rgba(15,11,8, .285) 74%, rgba(15,11,8, 0) 100%);
 }
 [dir="rtl"] .hero2.is-scrub .hero2-scrim {
-  background: radial-gradient(48% 30% at 72% 62%, rgba(15,11,8, var(--shade)) 0%, rgba(15,11,8, calc(var(--shade) * .72)) 38%,
-    rgba(15,11,8, calc(var(--shade) * .3)) 66%, rgba(15,11,8, 0) 100%);
+  background:
+    radial-gradient(34% 8.5% at 74% 79.5%, rgba(15,11,8, 1) 0%, rgba(15,11,8, .9) 55%, rgba(15,11,8, .4) 82%, rgba(15,11,8, 0) 100%),
+    radial-gradient(50% 32% at 73% 70%, rgba(15,11,8, .75) 0%, rgba(15,11,8, .645) 45%, rgba(15,11,8, .285) 74%, rgba(15,11,8, 0) 100%);
+}
+@media (max-width: 1023.98px) {
+  .hero2.is-scrub .hero2-scrim {
+    background:
+      radial-gradient(72% 7.5% at 50% 78%, rgba(15,11,8, 1) 0%, rgba(15,11,8, .9) 55%, rgba(15,11,8, .4) 82%, rgba(15,11,8, 0) 100%),
+      radial-gradient(80% 29% at 40% 72%, rgba(15,11,8, .75) 0%, rgba(15,11,8, .645) 45%, rgba(15,11,8, .285) 74%, rgba(15,11,8, 0) 100%);
+  }
+  [dir="rtl"] .hero2.is-scrub .hero2-scrim {
+    background:
+      radial-gradient(72% 7.5% at 50% 78%, rgba(15,11,8, 1) 0%, rgba(15,11,8, .9) 55%, rgba(15,11,8, .4) 82%, rgba(15,11,8, 0) 100%),
+      radial-gradient(80% 29% at 60% 72%, rgba(15,11,8, .75) 0%, rgba(15,11,8, .645) 45%, rgba(15,11,8, .285) 74%, rgba(15,11,8, 0) 100%);
+  }
+}
+@media (max-width: 1023.98px) and (prefers-reduced-motion: no-preference) {
+  /* Narrow screens: a soft, fixed shade that belongs to the text block itself (follows its size in every language and
+     line count, and fades and moves together with the text). Painted once with the text; no work while scrolling. */
+  .hero2.is-scrub .hero2-in { position: relative; }
+  .hero2.is-scrub .hero2-in::before {
+    content: ""; position: absolute; z-index: -1; pointer-events: none;
+    left: -12.5%; right: -12.5%; top: -27.5%; bottom: -17.5%;
+    background: radial-gradient(closest-side, rgba(15,11,8, .45) 0%, rgba(15,11,8, .383) 50%, rgba(15,11,8, .18) 78%, rgba(15,11,8, 0) 100%);
+  }
+}
+/* The secondary WhatsApp link is hidden while the scroll video runs (WhatsApp stays in the header and the floating
+   button); visitors who get the static poster (reduced motion, Save-Data, no video) keep it. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero2.is-scrub .hero2-cta .secondary { display: none; }
 }
 
 /* White typography, no glow; a very soft shadow fades in only with the sand fade at the end of the hero */
@@ -53,30 +88,112 @@
   position: absolute; left: 0; right: 0; top: 0; height: calc(100% + 48px); z-index: -1; pointer-events: none;
   transition: opacity .5s;
 }
-.site-header.hdr-adapt.is-solid .hdr-scrim { opacity: 0; }
-.site-header.hdr-adapt.over-hero:not(.is-solid) .brand-name b,
-.site-header.hdr-adapt.over-hero:not(.is-solid) .brand-name small {
+.site-header.hdr-adapt.is-solid .hdr-scrim, .site-header.hdr-adapt.hdr-past .hdr-scrim { opacity: 0; }
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .brand-name b,
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .brand-name small {
   color: rgb(calc(34 + 221 * var(--hb, 0)) calc(30 + 225 * var(--hb, 0)) calc(25 + 230 * var(--hb, 0)));
   text-shadow: 0 1px 2px rgba(15,11,8, calc(var(--hb, 0) * .2)); transition: none;
 }
-.site-header.hdr-adapt.over-hero:not(.is-solid) .navlink,
-.site-header.hdr-adapt.over-hero:not(.is-solid) .navdrop-t,
-.site-header.hdr-adapt.over-hero:not(.is-solid) .langdrop-t {
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .navlink,
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .navdrop-t,
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .langdrop-t {
   color: rgb(calc(34 + 221 * var(--hn, 0)) calc(30 + 225 * var(--hn, 0)) calc(25 + 230 * var(--hn, 0)));
   text-shadow: 0 1px 2px rgba(15,11,8, calc(var(--hn, 0) * .2)); transition: none;
 }
-.site-header.hdr-adapt.over-hero:not(.is-solid) .navlink::after {
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .navlink::after {
   background: rgb(calc(34 + 221 * var(--hn, 0)) calc(30 + 225 * var(--hn, 0)) calc(25 + 230 * var(--hn, 0)));
 }
-.site-header.hdr-adapt.over-hero:not(.is-solid) .brand img { filter: brightness(calc(1 + .6 * var(--hb, 0))); }
-.site-header.hdr-adapt.over-hero:not(.is-solid) .navdrop-t svg,
-.site-header.hdr-adapt.over-hero:not(.is-solid) .langdrop-t svg { filter: none; }
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .brand img { filter: brightness(calc(1 + .6 * var(--hb, 0))); }
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .navdrop-t svg,
+.site-header.hdr-adapt.over-hero:not(.is-solid):not(.hdr-past) .langdrop-t svg { filter: none; }
 /* leaving the hero (header turns solid): colours ease instead of jumping */
 .site-header.hdr-adapt .brand-name b, .site-header.hdr-adapt .brand-name small { transition: color .5s; }
 
+/* "Horizon Chapter": the Method section rises over the last part of the hero video.
+   Active only with .is-chapter, which js/hero-scrub.js adds when it finds the Method section, so a page with an
+   older cached script (or none) keeps the previous layout. Driven by js/hero-scrub.js:
+     --hero-out  0 -> 1 between 46% and 58% of the hero's scroll (eased): the heading and buttons leave
+     .is-out     once they have left (they no longer take clicks; still in the accessibility tree, and a
+                 keyboard focus inside them brings them back)
+     .hdr-past   on the header: its solid look as soon as the hero starts to leave the screen
+   Method overlaps the hero's track by --ch-ov, so its heading enters the screen at ~72% of the hero's scroll and
+   lands --ch-land below the top of the screen when the track ends. js/hero-scrub.js measures --ch-land per screen
+   size and heading length (below the final shot's horizon, steps on the dense sand fade); the values here are only
+   the defaults until then. The text reads on a veil drawn inside Method (below), which scrolls in with it and is solid
+   limestone exactly at the stage's bottom edge, where the page continues; the hero's own fade is only a light haze.
+   min-height = overlap: Method always reaches that edge,
+   so the next section never starts underneath the pinned stage. Only opacity/transform change while scrolling.
+   (Inside a no-preference motion query: if reduced motion is switched on while the page is open, the hero turns
+   static and Method goes back to its normal place.) */
+@property --hero-out { syntax: '<number>'; inherits: true; initial-value: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero2.is-scrub.is-chapter .hero2-in {
+    opacity: calc(1 - var(--hero-out));
+    transform: translateY(calc(var(--hero-out) * -28px));
+  }
+  .hero2.is-scrub.is-chapter.is-out .hero2-in { pointer-events: none; }
+  .hero2.is-scrub.is-chapter .hero2-in:focus-within { opacity: 1; pointer-events: auto; }
+  .hero2.is-scrub.is-chapter ~ .method {
+    --ch-land: 26svh;
+    --ch-ov: calc(100svh - var(--ch-land) + var(--section));
+    position: relative; z-index: 3;
+    margin-top: calc(-1 * var(--ch-ov)); min-height: var(--ch-ov);
+    pointer-events: none;                       /* its empty top padding never blocks the hero below */
+  }
+  .hero2.is-scrub.is-chapter ~ .method .grid > * { pointer-events: auto; }
+  /* the sand fade becomes a light, late haze over the bottom of the video only (66-78% of the scroll): it supports the
+     Method label and heading as they enter, and keeps the video clear until then. Same colour, drawn once; only its
+     opacity changes. The same stops are in fadeAt() in js/hero-scrub.js (header / text-gradient model). */
+  .hero2.is-scrub.is-chapter .hero2-ov {
+    background: linear-gradient(to bottom, rgba(239,233,223,0) 0%, rgba(239,233,223,0) 60%, rgba(239,233,223,.06) 75%,
+      rgba(239,233,223,.2) 85%, rgba(239,233,223,.4) 93%, rgba(239,233,223,.52) 100%);
+  }
+  /* The veil the Method text reads on is part of Method and scrolls in with it - never on screen before the text.
+     A faint mist from just above the label (11px text), feathered over --ch-feather into the steps, then solid
+     limestone exactly where the hero video ends (--ch-ov from Method's top), so the page continues seamlessly.
+     Painted once with the section; nothing changes while scrolling. --ch-steps: the steps' top inside Method,
+     measured by js/hero-scrub.js on load / resize (60% until then, while Method is far off screen). */
+  .hero2.is-scrub.is-chapter ~ .method { --ch-feather: 22svh; }
+  .hero2.is-scrub.is-chapter ~ .method::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(to bottom,
+      rgba(239,233,223,0) 0,
+      rgba(239,233,223,0) calc(var(--section) - 110px),
+      rgba(239,233,223,.06) calc(var(--section) - 60px),
+      rgba(239,233,223,.12) calc(var(--section) - 24px),
+      rgba(239,233,223,.16) var(--section),
+      rgba(239,233,223,.16) calc(var(--ch-steps, 60%) - var(--ch-feather)),
+      rgba(239,233,223,.21) calc(var(--ch-steps, 60%) - var(--ch-feather) * .72),
+      rgba(239,233,223,.29) calc(var(--ch-steps, 60%) - var(--ch-feather) * .48),
+      rgba(239,233,223,.42) calc(var(--ch-steps, 60%) - var(--ch-feather) * .24),
+      rgba(239,233,223,.58) var(--ch-steps, 60%),
+      rgba(239,233,223,.72) min(calc(var(--ch-steps, 60%) + 110px), var(--ch-ov)),
+      rgba(239,233,223,.86) min(calc(var(--ch-steps, 60%) + 240px), var(--ch-ov)),
+      var(--limestone) var(--ch-ov),
+      var(--limestone) 100%);
+  }
+  /* the small stone label is too faint over the sky; ink keeps it legible (it ends on limestone anyway) */
+  .hero2.is-scrub.is-chapter ~ .method .label { color: var(--ink); }
+}
+/* 1px markers watched by IntersectionObservers (js/hero-scrub.js): the header turns solid (.hdr-past) as soon as the
+   stage's top edge leaves the screen (.ch-end - the hero starts to slide away); the marker at the Method heading's top
+   edge (.ch-mark, the previous trigger) remains as a fallback */
+.method .ch-mark {
+  position: absolute; left: 0; top: calc(var(--section) - 12px); width: 1px; height: 1px;
+  visibility: hidden; pointer-events: none;
+}
+.hero2-stage .ch-end {
+  position: absolute; left: 0; top: 0; width: 1px; height: 1px;
+  visibility: hidden; pointer-events: none;
+}
+.site-header.hdr-past { background: var(--limestone); border-bottom-color: var(--rule); }
+/* the floating WhatsApp button steps aside while Method text passes under it (.ch-hold from js/hero-scrub.js) */
+.wa-fab.is-in.ch-hold { opacity: 0; transform: translateY(22px) scale(.92); pointer-events: none; }
+.wa-fab.is-in.ch-hold::before { animation: none; }
+
 /* Touch devices (phones/tablets) only - desktop is untouched by this block.
-   1. js/hero-scrub.js writes --hero-sand/--shade on the hero itself here (not on <body>), so their changes restyle only the
-      hero instead of the whole page; the --shade transition moves with them.
+   1. js/hero-scrub.js writes --hero-sand on the hero itself here (not on <body>), so its changes restyle only the hero
+      instead of the whole page (the text gradient's strength is the scrim's opacity, see above).
    2. Toolbar gap: 100svh is the height with the browser toolbar shown. Once the toolbar hides (scrolling), the screen is
       taller by (100lvh - 100svh) and the hero's cream background showed below the video. The stage is now 100lvh tall
       (static unit: no re-layout while the toolbar moves); with the toolbar shown, that extra strip sits behind it.
@@ -84,10 +201,15 @@
       shown and do not move when it hides. The hero keeps 200vh of scroll (same progress mapping); the text's adaptive
       gradient keeps its previous geometry (100svh tall). Browsers without lvh ignore these lines (previous behaviour). */
 @media (hover: none) and (pointer: coarse) {
-  .hero2.is-scrub { height: calc(100lvh + 200vh); transition: --shade .6s ease; }
+  .hero2.is-scrub { height: calc(100lvh + 200vh); }
   .hero2.is-scrub .hero2-stage { height: 100lvh; }
   .hero2.is-scrub .grid { padding-bottom: calc(clamp(58px, 9vh, 120px) + (100lvh - 100svh)); }
   .hero2.is-scrub .hero2-scrim { bottom: auto; height: 100svh; }
+  /* Horizon Chapter on touch devices: the stage is 100lvh here; the heading lands a little lower (32svh) so the
+     steps rest on the sand fade - higher up they would sit over the sea, too busy for small text on a narrow screen */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero2.is-scrub.is-chapter ~ .method { --ch-land: 32svh; --ch-ov: calc(100lvh - var(--ch-land) + var(--section)); }
+  }
   /* Floating WhatsApp button only (.wa-fab, not the header button): held in its own hidden state while the video is
      in progress (hidden at once, so it is never seen fading out over the moving video); when js/hero-scrub.js removes
      .is-playing (final frame painted) its own transition fades it back in. */

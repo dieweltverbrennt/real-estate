@@ -9,13 +9,20 @@
    The video never plays on its own: only currentTime is set, one seek at a time. Only original frames are
    shown - nothing is generated, blended or sharpened.
    Hero look (approved "Variant 5", styles in css/hero-video.css): the original sand fade rises only over the last
-   20% of the hero's scroll (--hero-sand), and a soft adaptive gradient behind the white text (--shade) follows how bright
+   20% of the hero's scroll (--hero-sand), and a soft adaptive gradient behind the white text (scrim opacity) follows how bright
    the frame behind the text is. The top headings (header over the hero) follow the same principle: an eased ink/white
    tone per zone (--hb brand, --hn navigation) and a per-heading feathered shade, no light glow. The secondary hero
    button's colour follows --hero-sand in CSS (no sampling).
-   The header's video read runs outside the seek loop (own task, at most every 150 ms, GPU canvas).
-   Touch devices: --hero-sand/--shade are set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
+   The header's brightness read runs outside the seek loop (own task, at most every 150 ms) and reads a precomputed
+   luminance table per video source (img/video/villa-hero-lum-<webm|mp4>.webp), not the video's pixels; only when no
+   matching table is available does it read the video (GPU canvas), as before.
+   Touch devices: --hero-sand is set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
    (mobile CSS block).
+   "Horizon Chapter" (css/hero-video.css): when the Method section follows the hero, it rises over the last part of
+   the video. Computed in the same scroll call as the sand fade - no extra loop and no pixel reads: --hero-out (heading
+   and buttons leave, 46-58% of the hero's scroll), .is-out, a light late haze instead of the full sand fade (66-78%),
+   .hdr-past on the header and .ch-hold on the WhatsApp button (IntersectionObservers), and Method's landing point and
+   the steps' position for the veil behind them (--ch-land, --ch-steps; measured on load / resize only).
    Backups of earlier versions: see the RESTORE notes in the backup folders. */
 (function () {
   'use strict';
@@ -70,9 +77,19 @@
   }
 
   // ---- hero look: sand fade at the end of the hero + adaptive gradient behind the text
-  var SAND_FROM = 0.8;                             // sand fade rises over the last 20% of the hero's scroll
+  // Horizon Chapter: only when the Method section follows the hero (all homepages); otherwise the previous behaviour.
+  var method = document.querySelector('#hero ~ .method'), CHAPTER = !!method;
+  var OUT_FROM = 0.46, OUT_TO = 0.58, out = 0, outCls = false;   // heading + buttons leave before Method arrives
+  // sand fade: with the chapter a light, late haze over the bottom of the video (66% -> 78% of the scroll), only there
+  // to support the Method label and heading as they enter - the veil behind the steps scrolls in with Method itself
+  // (css/hero-video.css); otherwise the original fade over the last 20%
+  var SAND_FROM = CHAPTER ? 0.66 : 0.8, SAND_TO = CHAPTER ? 0.78 : 1;
+  // its gradient (y 0 top .. 1 bottom -> opacity at full strength): css/hero-video.css (.hero2-ov / chapter version)
+  var FADE = CHAPTER ? [[0, 0], [.60, 0], [.75, .06], [.85, .20], [.93, .40], [1, .52]]
+                     : [[0, 0], [.38, 0], [.54, .14], [.70, .40], [.85, .72], [1, 1]];
+  if (CHAPTER) hero.classList.add('is-chapter');
   var body = document.body, textBlock = hero.querySelector('.hero2-in'), sand = -1;
-  // Touch devices (same query as the mobile block in css/hero-video.css). There --hero-sand/--shade are set on the hero
+  // Touch devices (same query as the mobile block in css/hero-video.css). There --hero-sand is set on the hero
   // itself, so a change restyles only the hero (on <body> it restyles the whole page); desktop keeps <body>.
   var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
   var varHost = hero;
@@ -87,14 +104,26 @@
 
   function smoothstep(x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
   function updateSand() {
-    var s = smoothstep((progress() - SAND_FROM) / (1 - SAND_FROM));
-    if (s === sand) return;
+    var p = progress();
+    var outBig = CHAPTER && updateOut(p);
+    var s = smoothstep((p - SAND_FROM) / (SAND_TO - SAND_FROM));
+    if (s === sand) { if (outBig) updateShade(); return; }
     var big = sand < 0 || Math.abs(s - sand) > 0.02 || s === 0 || s === 1;
     sand = s; varHost.style.setProperty('--hero-sand', s.toFixed(4));
-    if (big) updateShade();                        // the sand fade also brightens what is behind the text
+    if (big || outBig) updateShade();              // the sand fade also brightens what is behind the text
+  }
+  // Horizon Chapter: the heading and buttons leave (opacity/translate in css/hero-video.css) before Method arrives.
+  // Returns true when the change is large enough for the text gradient (which leaves with the text) to follow.
+  function updateOut(p) {
+    var o = smoothstep((p - OUT_FROM) / (OUT_TO - OUT_FROM));
+    if (o === out) return false;
+    var big = Math.abs(o - out) > 0.02 || o === 0 || o === 1;
+    out = o; hero.style.setProperty('--hero-out', o.toFixed(4));
+    if ((o >= 0.999) !== outCls) { outCls = o >= 0.999; hero.classList.toggle('is-out', outCls); }
+    return big;
   }
   function fadeAt(y) {                             // sand fade opacity at a height of the hero (0 top, 1 bottom)
-    var st = [[0, 0], [.38, 0], [.54, .14], [.70, .40], [.85, .72], [1, 1]];
+    var st = FADE;
     for (var i = 1; i < st.length; i++) if (y <= st[i][0]) return st[i - 1][1] + (st[i][1] - st[i - 1][1]) * (y - st[i - 1][0]) / (st[i][0] - st[i - 1][0]);
     return 1;
   }
@@ -116,15 +145,17 @@
     }
     if (!wsum) return;
     var eff = sum / wsum;
-    // deepen the brighter parts behind the text just enough for white type; a little more support only during the
-    // final transition (bright sand + white surf behind the text)
-    var cap = 0.5 + 0.15 * sd, aim = 135 - 25 * sd;
+    // deepen the brighter parts behind the text enough for white type (measured: heading >= 3:1, subtitle >= 4.5:1 in
+    // nearly every frame with the gradient in css/hero-video.css); a little more support only during the final transition
+    var cap = 0.7 + 0.15 * sd, aim = 70 - 25 * sd;
     var shade = Math.max(0, Math.min(cap, (eff - aim) / (eff - 10)));
-    varHost.style.setProperty('--shade', shade.toFixed(3));
+    // gradient strength = the scrim layer's opacity (css/hero-video.css); it leaves together with the text
+    scrim.style.opacity = (shade * (1 - out)).toFixed(3);
   }
 
   // ---- seek pipeline: one seek at a time; the next one only after the decoded frame has been painted
   var shown = -1, busy = false, target = 0;
+  var painted = 0;                               // source frame on screen (what the header's brightness read sees)
   function pump() {
     if (!ready || target === shown || busy || video.seeking) return;
     shown = target; busy = true;
@@ -132,6 +163,7 @@
     video.currentTime = (target + 0.3) / FPS;    // aim slightly past the frame start (never the previous frame)
   }
   video.addEventListener('seeked', function () {
+    painted = Math.max(0, Math.round(video.currentTime * FPS - 0.3));   // one seek at a time: this is the frame now shown
     if (!ready) { start(); return; }
     requestAnimationFrame(function () {
       busy = false;
@@ -216,7 +248,7 @@
   try { ctx = cvs.getContext('2d', { willReadFrequently: false }); } catch (e) {}
   var TONE_S = 0.5, SHADE_TAU = 0.12, SMOOTH_TAU = 0.06;   // seconds
   var DWELL_MS = 120;                                      // a new tone must hold this long before the text moves
-  var H_AIM = 128, H_CAP = 0.42, H_MARGIN = 1.25;          // shade target / limit, hysteresis (contrast ratio)
+  var H_AIM = 80, H_CAP = 0.8, H_MARGIN = 1.25;            // shade target / limit, hysteresis (contrast ratio)
   var Y_INK = relY(0x22) * 0.2126 + relY(0x1E) * 0.7152 + relY(0x19) * 0.0722;
   var zones = [], scrims = [], hlive = false, hraf = 0, hlast = 0, recheck = 0;
   function addScrim(cls, parent, before) {                 // decorative layer for a zone's feathered shade
@@ -256,6 +288,79 @@
   function relY(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
   function pct(a, q) { a.sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; }
 
+  // Header luminance table: the same brightness read as sample() without touching the video's pixels while scrolling
+  // (reading video pixels back from the GPU blocked the main thread for 30-140 ms per read). One greyscale WebP per video
+  // source, made from that source's decoded frames (img/video/villa-hero-lum-webm.webp / -mp4.webp), holds the mean
+  // luminance (0.2126 R + 0.7152 G + 0.0722 B) of every unique frame (frame 5k+1 repeats 5k): video rows 0-383 in 16x16 px
+  // cells (where the header sits while the hero is pinned) and rows 384-1439 in 128x96 px cells (reached only while the
+  // hero slides away). Atlas, 160 px wide: frame u's 160x24 band at rows 24u..24u+23, its 20x11 coarse block at
+  // x 20*(u%8), y 24*N + 11*floor(u/8). sample() reads it at the same points its drawImage read the video (the cell each
+  // point falls in); everything after that (sand fade, percentiles, thresholds, hysteresis, timing) is unchanged.
+  // The file loads with low priority, is decoded off the main thread (createImageBitmap) and read once, in small slices
+  // (a one-off read of this image, not the video). It is used only for the 292-frame 2560x1440 clip and only for the source
+  // it was made from; if it is missing, does not fit or cannot be read, sample() reads the video as before.
+  // Regenerate both files together with CLIP_REL/CLIP_BRIGHT when the video changes.
+  var LUM_W = 160, LUM_BAND = 384, LUM_BK = 16, LUM_BH = 24, LUM_AKX = 128, LUM_AKY = 96, LUM_AW = 20, LUM_AH = 11, LUM_ROW = 8;
+  var LUM_N = CLIP_FRAMES - Math.ceil((CLIP_FRAMES - 1) / 5);      // unique frames (233)
+  var lumData = null, lumState = 0, lumFor = '';                  // state: 0 not requested, 1 loading, 2 ready, -1 unavailable
+  function lumLoad() {                                            // lumFor: the video source the table belongs to
+    if (lumState && lumFor !== video.currentSrc) { lumState = 0; lumData = null; }   // the video switched source (e.g. the
+    if (lumState || !zones.length) return;                                           // first one failed): load its own table
+    var src = video.currentSrc || '', m = /^(.+)\.(webm|mp4)(?:[?#].*)?$/i.exec(src);
+    if (!src || video.readyState < 1) return;                     // source not confirmed yet (it may still fail and fall
+                                                                  // back to the next one): retried on loadedmetadata
+    lumFor = src;
+    if (!m) { lumState = -1; return; }                            // a source without a table: read the video (as before)
+    lumState = 1;
+    var url = m[1] + '-lum-' + m[2].toLowerCase() + '.webp', fail = function () { lumFail(src); };
+    if (window.fetch && window.createImageBitmap) {               // decoded off the main thread (an <img> decodes on it)
+      fetch(url, { priority: 'low' }).then(function (r) { if (!r.ok) throw r.status; return r.blob(); })
+        .then(function (b) { return createImageBitmap(b); }).then(function (bmp) { lumDecode(bmp, bmp.width, bmp.height, src); }, fail);
+    } else {
+      var img = new Image();
+      img.onload = function () { lumDecode(img, img.naturalWidth, img.naturalHeight, src); }; img.onerror = fail;
+      img.src = url;
+    }
+  }
+  function lumFail(src) { if (src !== lumFor) return; lumState = -1; lumData = null; toneLater(); }
+  function lumDecode(img, iw, ih, src) {
+    var H = LUM_BH * LUM_N + LUM_AH * Math.ceil(LUM_N / LUM_ROW), STEP = 480, y = 0, out = new Uint8Array(LUM_W * H), x = null;
+    if (iw !== LUM_W || ih !== H) return lumFail(src);
+    var c = document.createElement('canvas'); c.width = LUM_W; c.height = STEP;
+    try { x = c.getContext('2d', { willReadFrequently: true }); } catch (e) {}
+    if (!x) return lumFail(src);
+    (function slice() {
+      if (src !== lumFor) return;                                 // superseded by a table for another source
+      try {
+        var h = Math.min(STEP, H - y);
+        x.clearRect(0, 0, LUM_W, STEP); x.drawImage(img, 0, y, LUM_W, h, 0, 0, LUM_W, h);
+        var d = x.getImageData(0, 0, LUM_W, h).data;
+        for (var i = 0, o = y * LUM_W; i < d.length; i += 4) out[o++] = Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
+      } catch (e) { return lumFail(src); }
+      y += h;
+      if (y < H) return setTimeout(slice, 0);
+      if (img.close) img.close();                                 // ImageBitmap: free the decoded image
+      lumData = out; lumState = 2; toneLater();
+    })();
+  }
+  function lumReady() {
+    return lumState === 2 && lumFor === video.currentSrc && video.videoWidth === 2560 && video.videoHeight === 1440 &&
+      Math.round(video.duration * FPS) === CLIP_FRAMES;
+  }
+  function lumAt(u, X, Y) {                                       // luminance at video pixel (X, Y) of unique frame u
+    var w = LUM_W, h = LUM_BH, kx = LUM_BK, ky = LUM_BK, x0 = 0, y0 = u * LUM_BH;
+    if (Y >= LUM_BAND) { Y -= LUM_BAND; w = LUM_AW; h = LUM_AH; kx = LUM_AKX; ky = LUM_AKY; x0 = (u % LUM_ROW) * LUM_AW; y0 = LUM_BH * LUM_N + Math.floor(u / LUM_ROW) * LUM_AH; }
+    var cx = Math.min(w - 1, Math.max(0, Math.floor(X / kx))), cy = Math.min(h - 1, Math.max(0, Math.floor(Y / ky)));
+    return lumData[(y0 + cy) * LUM_W + x0 + cx];                  // the cell it falls in (keeps more of the frame's contrast than blending cells)
+  }
+  function lumRead(sx, sy, sw, sh, rows) {                        // the HC x rows grid drawImage made from (sx, sy, sw, sh)
+    var f = painted % 5 === 1 ? painted - 1 : painted, u = Math.max(0, Math.min(LUM_N - 1, f - Math.floor((f + 3) / 5))), d = [];
+    for (var r = 0; r < rows; r++) for (var c = 0; c < HC; c++) d.push(lumAt(u, sx + (c + 0.5) * sw / HC, sy + (r + 0.5) * sh / rows));
+    return d;
+  }
+  lumLoad();
+  video.addEventListener('loadedmetadata', lumLoad);
+
   // Luminance (0-255) on a HC x HRW grid behind a viewport rect, as the visitor sees it: the video frame (object-fit:
   // cover), lightened by the sand fade, and limestone where the rect is below the stage.
   function sample(R, sr) {
@@ -263,8 +368,9 @@
     var s = Math.max(w / video.videoWidth, h / video.videoHeight);
     var sx = (video.videoWidth * s - w) / 2 / s, sy = (video.videoHeight * s - h) / 2 / s;
     var y0 = Math.max(R.top, sr.top), vis = Math.min(R.bottom, sr.bottom) - y0;
-    var rows = vis > 0 ? Math.max(1, Math.round(HRW * vis / R.height)) : 0, d = null;
-    if (rows) {
+    var rows = vis > 0 ? Math.max(1, Math.round(HRW * vis / R.height)) : 0, d = null, fromTable = rows > 0 && lumReady();
+    if (fromTable) d = lumRead(sx + (R.left - sr.left) / s, sy + (y0 - sr.top) / s, R.width / s, vis / s, rows);
+    else if (rows) {                                     // no table for this video: read the frame itself (as before)
       ctx.drawImage(video, sx + (R.left - sr.left) / s, sy + (y0 - sr.top) / s, R.width / s, vis / s, 0, 0, HC, rows);
       d = ctx.getImageData(0, 0, HC, rows).data;
     }
@@ -273,7 +379,8 @@
       var y = R.top + (r + 0.5) / HRW * R.height - sr.top, f = y >= h ? 1 : fadeAt(y / h) * sd;
       for (var c = 0; c < HC; c++) {
         var L = 233;
-        if (r < rows) { var i = (r * HC + c) * 4; L = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; }
+        if (r < rows && fromTable) L = d[r * HC + c];
+        else if (r < rows) { var i = (r * HC + c) * 4; L = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; }
         lum.push(L * (1 - f) + 233 * f);
       }
     }
@@ -282,12 +389,16 @@
 
   function tone() {
     if (!zones.length || !video.videoWidth) return;
+    lumLoad();                                             // (no-op once the table for the current source is requested)
+    // Luminance table still loading (it calls toneLater() when ready): only the very first reading may come from the
+    // video, so the header gets its first tone exactly when and as before; later readings wait for the table.
+    if ((lumState === 1 || !lumState) && hlive) return;
     var now = performance.now();
     if (hlive && now - hlive < 6) return;                  // seek, scroll and re-check land in one update per frame
     var dt = hlive ? (now - hlive) / 1000 : 1;
     hlive = now;
     if (!geo) measure();
-    var sr = stage.getBoundingClientRect(), solid = header.classList.contains('is-solid'), leaving = sr.top < -1;
+    var sr = stage.getBoundingClientRect(), solid = hdrSolid(), leaving = sr.top < -1;
     var R = { left: 0, top: 0, right: geo.w, bottom: geo.h, width: geo.w, height: geo.h };   // fixed header at the top
     var a = 1 - Math.exp(-dt / SMOOTH_TAU), lum = null, anim = false;
     try {
@@ -320,6 +431,7 @@
         z.p20 = z.p20 == null || dt >= 1 ? p20z : z.p20 + (p20z - z.p20) * a;
         var cw = 1.05 / (relY(z.p80) + 0.05), cd = (relY(z.p20) + 0.05) / (Y_INK + 0.05);
         var white = z.white ? cw * H_MARGIN > cd : cw > cd * H_MARGIN;
+        if (cd < 4.5) white = true;                        // ink only where it reads on its own; white type gets the shade
         if (leaving && !z.white) white = false;            // hero sliding away: only towards ink (the next section)
         if (z.first === undefined) {                       // first frame: unbiased choice, no fade-in
           z.first = false; white = cw >= cd; z.white = white; z.p = z.t = white ? 1 : 0;
@@ -349,10 +461,10 @@
         if (Math.abs(d) > 0.002) { it.s += d * k; busy = true; } else it.s = it.aim;
         var S = it.s * z.t;                                  // shade only as far as the text has turned white
         if (S < 0.004) return;
-        var rx = it.w * 0.62 + 26, ry = it.h * 0.5 + 18;
+        var rx = it.w * 0.8 + 34, ry = it.h * 0.6 + 20;     // wide enough to reach the ends of long labels
         g.push('radial-gradient(' + rx.toFixed(1) + 'px ' + ry.toFixed(1) + 'px at ' + it.x.toFixed(1) + 'px ' + it.y.toFixed(1) + 'px,' +
-          'rgba(15,11,8,' + S.toFixed(3) + ') 0%,rgba(15,11,8,' + (S * 0.72).toFixed(3) + ') 38%,rgba(15,11,8,' +
-          (S * 0.3).toFixed(3) + ') 66%,rgba(15,11,8,0) 100%)');
+          'rgba(15,11,8,' + S.toFixed(3) + ') 0%,rgba(15,11,8,' + (S * 0.86).toFixed(3) + ') 45%,rgba(15,11,8,' +
+          (S * 0.38).toFixed(3) + ') 74%,rgba(15,11,8,0) 100%)');
       });
     });
     scrims.forEach(function (el, i) {
@@ -380,9 +492,99 @@
   // While the hero is pinned the strip behind the header only changes with the video frame ('seeked' re-samples it),
   // so scrolling needs a re-sample only while the hero slides away, and once when that or the solid header changes.
   var lastSlide = false, lastSolid = false;
+  // solid header: its own colours, no reading. .hdr-past = Horizon Chapter: the hero has started to leave the screen.
+  function hdrSolid() { return header.classList.contains('is-solid') || header.classList.contains('hdr-past'); }
+  // Horizon Chapter: the header takes its solid look as soon as the hero starts to leave the screen (1px marker at the
+  // top edge of the sticky stage, css/hero-video.css) - while the video slides away, the strip behind the transparent
+  // header passes the dark navy horizon band, where ink drops to ~1.5:1. A second marker at the Method heading's top
+  // edge (the previous trigger) stays as a fallback. IntersectionObservers only: no work while scrolling.
+  if (CHAPTER && header && 'IntersectionObserver' in window) {
+    var mark = document.createElement('div'), markIO = null, markH = -1, markPast = false, endPast = false;
+    var setPast = function () {
+      var past = markPast || endPast;
+      if (past !== header.classList.contains('hdr-past')) { header.classList.toggle('hdr-past', past); toneLater(); }
+    };
+    mark.className = 'ch-mark'; mark.setAttribute('aria-hidden', 'true');
+    method.insertBefore(mark, method.firstChild);
+    var watchMark = function () {                  // the line is the header's bottom edge (re-made if its height changes)
+      var hh = header.offsetHeight;
+      if (hh === markH) return;
+      markH = hh;
+      if (markIO) markIO.disconnect();
+      markIO = new IntersectionObserver(function (es) {
+        var e = es[es.length - 1];
+        markPast = !e.isIntersecting && !!e.rootBounds && e.boundingClientRect.top < e.rootBounds.top + 1;
+        setPast();
+      }, { rootMargin: '-' + hh + 'px 0px 0px 0px', threshold: [0, 1] });
+      markIO.observe(mark);
+    };
+    watchMark();
+    window.addEventListener('resize', watchMark, { passive: true });
+    // the stage's top edge: off screen (above the viewport) = the stage has started to slide away
+    var stageEnd = document.createElement('div');
+    stageEnd.className = 'ch-end'; stageEnd.setAttribute('aria-hidden', 'true');
+    stage.appendChild(stageEnd);
+    new IntersectionObserver(function (es) {
+      var e = es[es.length - 1];
+      endPast = !e.isIntersecting && !!e.rootBounds && e.boundingClientRect.top < e.rootBounds.top;
+      setPast();
+    }, { threshold: [0, 1] }).observe(stageEnd);
+  }
+  // Horizon Chapter landing point (--ch-land, css/hero-video.css): where the top of the Method content sits on screen
+  // when the hero's track ends; the heading enters the screen as early as this allows. Two limits:
+  //  - Method text must not rest on the final shot's horizon, the thin dark navy band between sky and sea (measured:
+  //    the label or heading there drops to ~2.5:1), so it lands HORIZON_GAP below it;
+  //  - the steps' small text must rest on the dense part of the sand fade (STEPS_AT of the screen), not over the sea.
+  // Depends on the screen size and the heading's length (language, font), so it is measured on load, when the video's
+  // size and the fonts are known, and on resize - never while scrolling. Before that the CSS default applies; Method is
+  // far off screen then. CLIP_HORIZON: the horizon's height in the final frame (fraction of the frame height), measured
+  // for img/video/villa-hero - update it together with CLIP_REL when the video changes.
+  if (CHAPTER) {
+    var chIntro = method.querySelector('.mt-intro'), chSteps = method.querySelector('.mt-steps'), chLand = -1, chStepsAt = -1;
+    var CLIP_HORIZON = 0.328, HORIZON_GAP = 0.13, STEPS_AT = MOBILE ? 0.56 : 0.58, LAND_MAX = 0.5;
+    var chapterLayout = function () {
+      if (!chIntro || !chSteps) return;
+      var sw = stage.offsetWidth, vh = stage.offsetHeight, block = chSteps.getBoundingClientRect().top - chIntro.getBoundingClientRect().top;
+      if (!(vh > 0) || !(sw > 0) || !(block > 0)) return;
+      var fw = video.videoWidth || 2560, fh = video.videoHeight || 1440, k = Math.max(sw / fw, vh / fh);   // object-fit: cover
+      var horizon = CLIP_HORIZON * fh * k - (fh * k - vh) / 2;                                          // on screen (px)
+      var land = Math.max(horizon + HORIZON_GAP * vh, STEPS_AT * vh - block);
+      land = Math.round(Math.min(LAND_MAX * vh, land));
+      // where the steps start inside Method: the limestone veil behind them is anchored there (--ch-steps)
+      var at = Math.round(chSteps.getBoundingClientRect().top - method.getBoundingClientRect().top);
+      if (at !== chStepsAt) { chStepsAt = at; method.style.setProperty('--ch-steps', at + 'px'); }
+      if (Math.abs(land - chLand) < 2) return;     // (mobile toolbar resizes do not move it: the stage is 100lvh)
+      chLand = land; method.style.setProperty('--ch-land', land + 'px');
+    };
+    video.addEventListener('loadedmetadata', chapterLayout);
+    chapterLayout();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(chapterLayout);
+    window.addEventListener('resize', chapterLayout, { passive: true });
+
+    // The floating WhatsApp button (.wa-fab) steps aside while Method text passes under it (.ch-hold, css/hero-video.css).
+    // One IntersectionObserver whose root is the button's corner of the screen: no work while scrolling.
+    var fab = document.querySelector('.wa-fab'), fabIO = null, fabKey = '';
+    var chItems = [chIntro].concat(Array.prototype.slice.call(method.querySelectorAll('.mt-step'))).filter(Boolean);
+    var watchFab = function () {
+      var r = fab.getBoundingClientRect(), key = Math.round(r.left) + ',' + Math.round(r.top) + ',' + innerWidth + ',' + innerHeight;
+      if (!r.width || key === fabKey) return;
+      fabKey = key;
+      if (fabIO) fabIO.disconnect();
+      // 40px around the button (its hidden state sits 22px lower than the shown one)
+      fabIO = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { e.target.__chHit = e.isIntersecting; });
+        fab.classList.toggle('ch-hold', chItems.some(function (el) { return el.__chHit; }));
+      }, { rootMargin: '-' + Math.max(0, Math.round(r.top - 40)) + 'px 0px 0px -' + Math.max(0, Math.round(r.left - 40)) + 'px' });
+      chItems.forEach(function (el) { el.__chHit = false; fabIO.observe(el); });
+    };
+    if (fab && chItems.length && 'IntersectionObserver' in window) {
+      watchFab();
+      window.addEventListener('resize', watchFab, { passive: true });
+    }
+  }
   function toneOnScroll() {
     if (!zones.length) return;
-    var slide = stage.getBoundingClientRect().top < -1, solid = header.classList.contains('is-solid');
+    var slide = stage.getBoundingClientRect().top < -1, solid = hdrSolid();
     if (slide || slide !== lastSlide || solid !== lastSolid) toneSoon();
     lastSlide = slide; lastSolid = solid;
   }

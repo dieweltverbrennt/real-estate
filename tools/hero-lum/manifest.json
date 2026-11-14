@@ -1,0 +1,33 @@
+{
+  "note": "Written by tools/hero-lum/build.mjs. Fingerprints of each hero video and the luminance table built from it; build.mjs --check compares against them.",
+  "tables": {
+    "webm": {
+      "video": "img/video/villa-hero.webm",
+      "videoBytes": 9253772,
+      "videoSha256": "0d04f7a79916587d6b36f230c501256933285e4beddea3500f1861ca4a48adaa",
+      "table": "img/video/villa-hero-lum-webm.webp",
+      "tableBytes": 171878,
+      "tableSha256": "58036e6f4571e1ccc40267c58ba10e09033960797e3568124d7305134f74a534",
+      "width": 160,
+      "height": 5922,
+      "uniqueFrames": 233,
+      "quality": 0.85,
+      "builtWith": "Chrome/157.0.8103.51",
+      "builtAt": "2026-11-13T18:11:08.748Z"
+    },
+    "mp4": {
+      "video": "img/video/villa-hero.mp4",
+      "videoBytes": 15677945,
+      "videoSha256": "6b4faad22c4e259727b34f5db0be7153ccd72047658cfabc594632e6646ec960",
+      "table": "img/video/villa-hero-lum-mp4.webp",
+      "tableBytes": 172050,
+      "tableSha256": "e8fbf90225a1f526eb25d90d6faa70650750ac2f65d6750d1d6c4225f617dfbb",
+      "width": 160,
+      "height": 5922,
+      "uniqueFrames": 233,
+      "quality": 0.85,
+      "builtWith": "Chrome/157.0.8103.51",
+      "builtAt": "2026-11-13T18:11:06.686Z"
+    }
+  }
+}
