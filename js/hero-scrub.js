@@ -93,9 +93,9 @@
   // itself, so a change restyles only the hero (on <body> it restyles the whole page); desktop keeps <body>.
   var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
   var varHost = hero;
-  // Touch devices only: the floating WhatsApp button (.wa-fab) stays hidden while the video is in progress (.is-playing
-  // on the hero, see the touch block in css/hero-video.css) and returns once the final frame has been painted.
-  function fabHold(on) { if (MOBILE) hero.classList.toggle('is-playing', on); }
+  // All devices: the floating WhatsApp button (.wa-fab) stays hidden while the video is in progress (.is-playing
+  // on the hero, see css/hero-video.css) and returns once the final frame has been painted.
+  function fabHold(on) { hero.classList.toggle('is-playing', on); }
   fabHold(true);
   var scrim = document.createElement('div');       // decorative layer for the adaptive gradient (css/hero-video.css)
   scrim.className = 'hero2-scrim'; scrim.setAttribute('aria-hidden', 'true');
@@ -172,6 +172,17 @@
     });
   });
 
+  // Back from the background (app switch, tab switch, bfcache): mobile browsers can suspend the paused video while the
+  // page is hidden and drop a seek that was in flight, so its 'seeked' never comes and the one-seek-at-a-time gate stays
+  // shut. On return, re-issue the current frame: a new seek replaces any pending one and reopens the gate.
+  function revive() {
+    if (document.visibilityState !== 'visible' || !ready) return;
+    shown = target; busy = true;
+    video.currentTime = (target + 0.3) / FPS;
+  }
+  document.addEventListener('visibilitychange', revive);
+  window.addEventListener('pageshow', function (e) { if (e.persisted) revive(); });
+
   // ---- cinematic camera
   var pos = 0, vel = 0, goal = 0, restGoal = null, lastScrollT = 0;
   function restPoint(x, r) {                     // sharpest frame near x, only ahead of the moving camera
@@ -236,8 +247,8 @@
   // the sand fade). (The secondary hero button needs no sampling: its colour follows --hero-sand in css/hero-video.css.)
   // Each zone gets a tone from 0 (ink) to 1 (white), chosen by which colour has more contrast against
   // what is behind it. The tone never switches: it glides (eased, ~0.5 s) so the text passes the in-between grey only
-  // briefly. Behind white text, each element gets its own feathered ellipse of the same soft shade as the main
-  // heading, as strong as the brightest part behind it needs (never anything behind dark text: no glow, no patches).
+  // briefly. Behind white text, one soft gradient runs across the top of the hero (full width, fading downward), as
+  // strong as the most demanding heading needs (never anything behind dark text: no glow, no patches).
   var header = document.getElementById('header');
   var HC = 96, HRW = 6;                                     // sample grid behind a zone
   var cvs = document.createElement('canvas');
@@ -448,9 +459,9 @@
   function hdrAnim(now) {
     hraf = 0;
     var dt = hlast ? Math.min(0.1, (now - hlast) / 1000) : 0.016; hlast = now;
-    var busy = false, grads = scrims.map(function () { return []; });
+    var busy = false, shades = scrims.map(function () { return 0; });
     zones.forEach(function (z) {
-      var goal = z.white ? 1 : 0, g = grads[scrims.indexOf(z.scrim)], k = 1 - Math.exp(-dt / SHADE_TAU);
+      var goal = z.white ? 1 : 0, si = scrims.indexOf(z.scrim), k = 1 - Math.exp(-dt / SHADE_TAU);
       if (z.p !== goal) { z.p = goal > z.p ? Math.min(goal, z.p + dt / TONE_S) : Math.max(goal, z.p - dt / TONE_S); busy = true; }
       z.t = z.p * z.p * z.p * (z.p * (z.p * 6 - 15) + 10);   // smootherstep: gentle at both ends, brief in the middle
       var tv = z.t.toFixed(3);
@@ -460,16 +471,12 @@
         var d = it.aim - it.s;
         if (Math.abs(d) > 0.002) { it.s += d * k; busy = true; } else it.s = it.aim;
         var S = it.s * z.t;                                  // shade only as far as the text has turned white
-        if (S < 0.004) return;
-        var rx = it.w * 0.8 + 34, ry = it.h * 0.6 + 20;     // wide enough to reach the ends of long labels
-        g.push('radial-gradient(' + rx.toFixed(1) + 'px ' + ry.toFixed(1) + 'px at ' + it.x.toFixed(1) + 'px ' + it.y.toFixed(1) + 'px,' +
-          'rgba(15,11,8,' + S.toFixed(3) + ') 0%,rgba(15,11,8,' + (S * 0.86).toFixed(3) + ') 45%,rgba(15,11,8,' +
-          (S * 0.38).toFixed(3) + ') 74%,rgba(15,11,8,0) 100%)');
+        if (S > shades[si]) shades[si] = S;                  // one band for the whole header: the strongest need, never stacked
       });
     });
-    scrims.forEach(function (el, i) {
-      var bg = grads[i].length ? grads[i].join(',') : 'none';
-      if (bg !== el.__bg) { el.__bg = bg; el.style.backgroundImage = bg; }
+    scrims.forEach(function (el, i) {                        // the band itself is drawn in CSS (.hdr-scrim, --hdr-shade)
+      var v = shades[i] < 0.004 ? '0' : shades[i].toFixed(3);
+      if (v !== el.__shade) { el.__shade = v; el.style.setProperty('--hdr-shade', v); }
     });
     if (busy) hraf = requestAnimationFrame(hdrAnim); else hlast = 0;
   }

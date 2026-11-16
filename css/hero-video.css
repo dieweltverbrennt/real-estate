@@ -53,12 +53,6 @@
     background: radial-gradient(closest-side, rgba(15,11,8, .45) 0%, rgba(15,11,8, .383) 50%, rgba(15,11,8, .18) 78%, rgba(15,11,8, 0) 100%);
   }
 }
-/* The secondary WhatsApp link is hidden while the scroll video runs (WhatsApp stays in the header and the floating
-   button); visitors who get the static poster (reduced motion, Save-Data, no video) keep it. */
-@media (prefers-reduced-motion: no-preference) {
-  .hero2.is-scrub .hero2-cta .secondary { display: none; }
-}
-
 /* White typography, no glow; a very soft shadow fades in only with the sand fade at the end of the hero */
 .hero2.is-scrub .hero2-lede,
 .hero2.is-scrub .hero2-sub {
@@ -81,11 +75,21 @@
 .hero2.is-scrub .hero2-cta .secondary::after { box-shadow: 0 1px 2px rgba(15,11,8, calc((1 - var(--cta-ink)) * .2)); }
 
 /* Top headings over the hero - same principle as the main heading (driven by js/hero-scrub.js, scroll-video only):
-   --hb (brand) and --hn (navigation) glide 0 = ink -> 1 = white; the feathered shade behind white headings is drawn
-   into .hdr-scrim per heading. No light glow, no cream wash behind the header. */
+   --hb (brand) and --hn (navigation) glide 0 = ink -> 1 = white; behind white headings, .hdr-scrim is one soft,
+   full-width gradient across the top of the hero, fading smoothly downward. Its strength (--hdr-shade, 0..1) comes
+   from js/hero-scrub.js; eased stops so it has no visible edge. No light glow, no cream wash behind the header. */
 .hero2.is-scrub .hero2-stage::before { opacity: 0; }
 .site-header.hdr-adapt .hdr-scrim {
   position: absolute; left: 0; right: 0; top: 0; height: calc(100% + 48px); z-index: -1; pointer-events: none;
+  --hdr-shade: 0;
+  background: linear-gradient(to bottom,
+    rgba(15,11,8, calc(var(--hdr-shade) * .80)) 0%,
+    rgba(15,11,8, calc(var(--hdr-shade) * .72)) 20%,
+    rgba(15,11,8, calc(var(--hdr-shade) * .56)) 38%,
+    rgba(15,11,8, calc(var(--hdr-shade) * .36)) 56%,
+    rgba(15,11,8, calc(var(--hdr-shade) * .18)) 72%,
+    rgba(15,11,8, calc(var(--hdr-shade) * .06)) 86%,
+    rgba(15,11,8, 0) 100%);
   transition: opacity .5s;
 }
 .site-header.hdr-adapt.is-solid .hdr-scrim, .site-header.hdr-adapt.hdr-past .hdr-scrim { opacity: 0; }
@@ -190,6 +194,11 @@
 /* the floating WhatsApp button steps aside while Method text passes under it (.ch-hold from js/hero-scrub.js) */
 .wa-fab.is-in.ch-hold { opacity: 0; transform: translateY(22px) scale(.92); pointer-events: none; }
 .wa-fab.is-in.ch-hold::before { animation: none; }
+/* Floating WhatsApp button only (.wa-fab, not the header button), all devices: held in its own hidden state while the
+   video is in progress (hidden at once, so it is never seen fading out over the moving video); when js/hero-scrub.js
+   removes .is-playing (final frame painted) its own transition fades it back in. */
+body:has(.hero2.is-scrub.is-playing) .wa-fab.is-in { opacity: 0; transform: translateY(22px) scale(.92); pointer-events: none; transition: none; }
+body:has(.hero2.is-scrub.is-playing) .wa-fab.is-in::before { animation: none; }
 
 /* Touch devices (phones/tablets) only - desktop is untouched by this block.
    1. js/hero-scrub.js writes --hero-sand on the hero itself here (not on <body>), so its changes restyle only the hero
@@ -210,9 +219,4 @@
   @media (prefers-reduced-motion: no-preference) {
     .hero2.is-scrub.is-chapter ~ .method { --ch-land: 32svh; --ch-ov: calc(100lvh - var(--ch-land) + var(--section)); }
   }
-  /* Floating WhatsApp button only (.wa-fab, not the header button): held in its own hidden state while the video is
-     in progress (hidden at once, so it is never seen fading out over the moving video); when js/hero-scrub.js removes
-     .is-playing (final frame painted) its own transition fades it back in. */
-  body:has(.hero2.is-scrub.is-playing) .wa-fab.is-in { opacity: 0; transform: translateY(22px) scale(.92); pointer-events: none; transition: none; }
-  body:has(.hero2.is-scrub.is-playing) .wa-fab.is-in::before { animation: none; }
 }
