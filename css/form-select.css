@@ -1,0 +1,50 @@
+/* Contact form dropdowns (pages with the enquiry form).
+   1. Scrollbars inside the dropdown lists - the phone-code list (.cc-list) and the lists below (.fs-list) - take a subtle
+      gold tint from the site's main scrollbar (css/site-scrollbar.css: bronze #8C6A3F). Firefox/Chrome use the standard
+      properties; Safari uses the ::-webkit-scrollbar rules (Chrome ignores those once scrollbar-color is set).
+   2. The native <select>s are replaced on screen by a button and a list styled like the phone-code dropdown
+      (js/form-select.js). The closed field keeps the exact look of the former select; the open list repeats .cc-pop /
+      .cc-list. The <select> itself stays in the form, hidden, and still holds the value. */
+
+/* 1. gold scrollbars */
+.cc-list, .fs-list { scrollbar-width: thin; scrollbar-color: rgba(140, 106, 63, .55) transparent; }
+.cc-list::-webkit-scrollbar, .fs-list::-webkit-scrollbar { width: 6px; }
+.cc-list::-webkit-scrollbar-track, .fs-list::-webkit-scrollbar-track { background: transparent; margin: 6px 0; }
+.cc-list::-webkit-scrollbar-thumb, .fs-list::-webkit-scrollbar-thumb { background: rgba(140, 106, 63, .55); border-radius: 6px; }
+.cc-list::-webkit-scrollbar-thumb:hover, .fs-list::-webkit-scrollbar-thumb:hover { background: rgba(140, 106, 63, .8); }
+
+/* Phone-code button arrow: drawn as one triangle. The page CSS builds it from two 5px gradient squares, which split
+   along their shared edge (light seam, grey top row) at any zoom/display scaling other than 100%. Same 10x5 size,
+   same place (left edge 12px from the button's right edge, 55% down), same ink colour (#221E19 = --ink). */
+.tel .cc {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='5' viewBox='0 0 10 5'%3E%3Cpath d='M0 0h10L5 5z' fill='%23221E19'/%3E%3C/svg%3E");
+  background-size: 10px 5px; background-position: calc(100% - 2px) 55%;
+}
+
+/* 2. dropdown fields */
+.fs { position: relative; }
+.fs > select.fs-native { display: none; }
+/* closed field: same as .field select */
+.fs-btn {
+  appearance: none; -webkit-appearance: none; display: block; width: 100%; margin: 0; text-align: start;
+  border: 0; border-bottom: 1px solid var(--stone); border-radius: 0; background-color: transparent;
+  padding: 10px 24px 12px 0; font: inherit; font-size: 17px; color: var(--ink); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 10px) 55%, calc(100% - 5px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+  transition: border-color .3s;
+}
+.fs-btn:focus, .fs-btn[aria-expanded="true"] { outline: 0; border-bottom-color: var(--ink); }
+.fs-btn:disabled { opacity: .4; cursor: not-allowed; }
+/* open list: same as .cc-pop / .cc-list */
+.fs-pop {
+  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; right: 0; display: flex; flex-direction: column;
+  background: var(--limestone); border: 1px solid var(--rule); box-shadow: 0 30px 60px -30px rgba(34, 30, 25, .45);
+}
+.fs-pop[hidden] { display: none; }
+.fs-list { position: relative; list-style: none; margin: 0; padding: 6px 0; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.fs-list:focus { outline: 0; }
+.fs-list [role="option"] { padding: 10px 16px; font-size: 15px; line-height: 1.3; color: var(--ink); cursor: pointer; }
+.fs-list .is-active, .fs-list [role="option"]:hover { background: var(--sand); }
+.fs-list [aria-selected="true"] { font-weight: 500; }
+.fs-list [aria-disabled="true"] { opacity: .4; cursor: default; }

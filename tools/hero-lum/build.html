@@ -3,9 +3,12 @@
 <script>
 // Builds the header luminance table for one hero video source (read by js/hero-scrub.js, "Header luminance table").
 // Driven by tools/hero-lum/build.mjs in headless Chrome; see tools/hero-lum/README.md.
-// Layout (greyscale WebP, width 160): for each unique frame u (frames 5k+1 repeat 5k and are skipped):
-//   band   rows u*24 .. u*24+23                     : mean luminance of video rows 0-383 in 16x16 px cells (160 x 24)
-//   coarse at x (u%8)*20, y 24*N + floor(u/8)*11     : video rows 384-1439 in 128x96 px cells (20 x 11)
+// Layout (greyscale WebP, width W = video width / 16): for each unique frame u (frames 5k+1 repeat 5k and are skipped):
+//   band   rows u*24 .. u*24+23                     : mean luminance of video rows 0-383 in 16x16 px cells (W x 24)
+//   coarse at x (u%R)*A, y 24*N + floor(u/R)*11      : video rows 384-1439 in 128x96 px cells (A x 11), A = ceil(width / 128),
+//                                                      R = floor(W / A) blocks per row; a narrower last column is averaged
+//                                                      over its own pixels
+//   2560x1440 clip: W 160, A 20, R 8 (unchanged). 816x1440 portrait clip: W 51, A 7, R 7.
 // Luminance per pixel = 0.2126 R + 0.7152 G + 0.0722 B of the frame as the browser decodes it (same as the runtime sampler).
 // These constants must match LUM_* in js/hero-scrub.js.
 var v = document.getElementById('v'), FPS = 30, q = new URLSearchParams(location.search);
@@ -17,7 +20,8 @@ var OUT = {};
 window.build = async function (quality) {
   while (!(v.duration > 0 && v.buffered.length && v.buffered.end(v.buffered.length - 1) >= v.duration - 0.05)) await new Promise(r => setTimeout(r, 50));
   var VW = v.videoWidth, VH = v.videoHeight, frames = Math.round(v.duration * FPS);
-  if (VW !== 2560 || VH !== 1440 || frames !== 292) throw new Error('unexpected clip ' + VW + 'x' + VH + ' ' + frames + ' frames (the table layout and js/hero-scrub.js expect 2560x1440, 292 frames)');
+  if (VW % BK || VH !== 1440 || frames !== 292) throw new Error('unexpected clip ' + VW + 'x' + VH + ' ' + frames + ' frames (the table layout and js/hero-scrub.js expect a width divisible by 16, height 1440, 292 frames)');
+  W = VW / BK; AW = Math.ceil(VW / AKX); PER_ROW = Math.floor(W / AW);
   var U = []; for (var f = 0; f < frames; f++) if (f % 5 !== 1) U.push(f);
   var N = U.length, H = BH * N + AH * Math.ceil(N / PER_ROW), atlas = new Uint8Array(W * H);
   var big = document.createElement('canvas'); big.width = VW; big.height = VH;
@@ -35,7 +39,7 @@ window.build = async function (quality) {
     }
     for (var i = 0; i < W * BH; i++) atlas[u * BH * W + i] = Math.round(band[i] / (BK * BK));
     var ax = (u % PER_ROW) * AW, ay = BH * N + Math.floor(u / PER_ROW) * AH;
-    for (var r = 0; r < AH; r++) for (var c = 0; c < AW; c++) atlas[(ay + r) * W + ax + c] = Math.round(away[r * AW + c] / (AKX * AKY));
+    for (var r = 0; r < AH; r++) for (var c = 0; c < AW; c++) atlas[(ay + r) * W + ax + c] = Math.round(away[r * AW + c] / (Math.min(AKX, VW - c * AKX) * AKY));
   }
   // sanity: a skipped repeat frame (5k+1) really equals 5k (mean abs difference of the green channel, top 16 rows)
   await seek(6); bx.drawImage(v, 0, 0); var d6 = bx.getImageData(0, 0, VW, 16).data; await seek(5); bx.drawImage(v, 0, 0); var d5 = bx.getImageData(0, 0, VW, 16).data;

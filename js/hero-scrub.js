@@ -2,10 +2,21 @@
    Scroll progress through #hero decides where the camera should be; the camera gets there like a real
    camera move instead of jumping frame by frame:
    - it moves over the clip's real camera positions (the villa clip repeats every 5th frame; repeats are skipped)
-   - inertia: limited acceleration, never slower than ~0.67x real speed while moving, a top speed, gentle braking
-   - slow scrolling is collected into short glides (>= 3 positions) instead of a frame-by-frame crawl
-   - when scrolling stops, the camera glides on to the sharpest frame nearby (searched only ahead of its
-     direction of travel, so it never steps back); first and last frames stay exact
+   - inertial "dolly" camera while the visitor scrolls: a gliding target gives it weight; a critically damped follower,
+     pushed by the target's speed (the push builds up smoothly), eases every start. Limits fade in - no hard switches.
+     Integrated in 4 ms sub-steps, so the path is the same at 30, 60 or 120 Hz.
+   - planned ending: the moment the scroll stops (or only crawls), the camera picks its resting frame - sharp, within
+     the sync window around the scroll position, never behind its direction of travel - and glides there on a quintic
+     curve that starts with its current speed and acceleration and ends with zero speed and zero deceleration. Glide
+     time = 2 x distance / speed, so it coasts and only slows down; it speeds up only when it must catch up (page jump).
+     Landing: the picture changes only by whole frames (the frame shown is the nearest to the camera), so the last
+     visible change happens half a position before the resting frame. The glide lands there - at a slow LAND_V, each
+     frame interval LAND_RATIO longer than the one before - and covers the final, invisible half position afterwards.
+     Without this the gentle end of the curve fell inside that invisible half position: the picture stopped while the
+     camera still moved and braked, after a last interval ~1.7x the previous one.
+     Scrolling again cancels the glide and hands back to the follower without a jump in speed or acceleration.
+   - a top speed, lower on touch devices (the portrait crop magnifies each step's motion ~2.2x)
+   - first and last frames stay exact
    The video never plays on its own: only currentTime is set, one seek at a time. Only original frames are
    shown - nothing is generated, blended or sharpened.
    Hero look (approved "Variant 5", styles in css/hero-video.css): the original sand fade rises only over the last
@@ -14,8 +25,12 @@
    tone per zone (--hb brand, --hn navigation) and a per-heading feathered shade, no light glow. The secondary hero
    button's colour follows --hero-sand in CSS (no sampling).
    The header's brightness read runs outside the seek loop (own task, at most every 150 ms) and reads a precomputed
-   luminance table per video source (img/video/villa-hero-lum-<webm|mp4>.webp), not the video's pixels; only when no
-   matching table is available does it read the video (GPU canvas), as before.
+   luminance table per video source (<video file>-lum-<webm|mp4>.webp next to the video), not the video's pixels; only
+   when no matching table is available does it read the video (GPU canvas), as before.
+   Two hero sources, chosen by <source media> in the homepages (the browser downloads only one): the landscape clip
+   (2560x1440) and, on portrait phones, villa-hero-mobile-k5.mp4 - the exact 816x1440 centre crop (x=872) of the same
+   master, so the same frames and composition. Per-clip data (CLIP_REL / CLIP_BRIGHT and the table layout) follows the
+   clip actually playing; the camera, scroll mapping and seek control are the same for both.
    Touch devices: --hero-sand is set on the hero (not <body>); the stage is sized for the toolbar-hidden viewport
    (mobile CSS block).
    "Horizon Chapter" (css/hero-video.css): when the Method section follows the hero, it rises over the last part of
@@ -42,15 +57,32 @@
   // Brightness of each frame (80th percentile, 0-255) on a 4x4 grid, row by row, 2 hex digits per cell; measured for
   // img/video/villa-hero. Drives the adaptive text gradient. Regenerate together with CLIP_REL when the video changes.
   var CLIP_BRIGHT = '708780768898d2da97859a9e907b809b708780768898d2da97859a9e907b809b708881748a98d2da96869a9d91787f9d708a80748b97d2dc97869a9e91767e9e6f8a83748a98d2de96879c9d91757ea06f8a86758997d2de91889c9d917279a4708a86768997d2de91889c9d917279a4708a89768697d1df90899d9c927174a5708a8f778097d1df8a899d9d947170a3708a95777c97d1df858a9d9a94706da2708a9d777797d1de828c9d95926f6ba1708a9d777797d1de828c9d95926f6ba1708aa0767596d0de818e9e96906d6b9e7189a4777496d0df818f9e978a6e6c9e7489a5767395d0df81909e99856f6c9e7789a77a7295cfdf82919f9b7f6e6f9f7789a77a7295cfdf82919f9b7f6e6f9f7889a8807294cfdf82919e9d7c6e70a07b89a9857294cedf83919d9f796e73a17f89aa877294cddf83929da1786e74a18189ac8e7293cddf85929da3766e76a08189ac8e7293cddf85919da3766e76a08388ac917293cdde85929ca4766f789f8488ac9d7292ccdd86929da47770799d8588aba77192ccdd86929da577707b9d8687adb27192cbdd88929ea477717c9b8687adb27192cbdd88929ea477717c9b8687adb97191cadc89929ea577727c9c8687acbb7190cadc89919ea578737c9c8687adbb7190c9dc8a929ea778747d9c8788aebb718fc9dc8b929daa77767d9c8788aebb718fc9dc8b929daa77767d9c8787acba718ec8da8b929dac76777c9c8788abba718fc6d98d929bab74787b9a8689acba718fc5d98c939aad727a7a99868aaab9718fc4d88d9497af6f7c7b97868aaab9718fc4d88d9497af6f7c7b97868baab9708fc3d88f9497b06c7d7b97858aacb9708ec2d78f9296b36b807c93858aacb9708ec2d7909194b468827d8f8488aeb8708cc2d6919093b466847e888488aeb8708cc2d6919093b467847e888387aeb7708bc1d5949091b266847f848284aeb6708abed5978e90b0678580828086aeb6708abdd4998d8fb2668681827c87adb6708bbcd49c8c8cb6648882827c87adb6708bbcd49c8c8cb6648882827988adb5708cbad29c8c8cb7638984827389acb5708bb7d19f8b89ba648a8582728aacb5708bb7d0a08b88bc638b8681728aacb4708bb7cfa18b88bd618c8883728aacb4708bb7cfa18b88bd618c8783728aaab3708ab2cea28a87bc628c8885718aa8b3708aafcda28b84bc698d8884718aa7b2708aadcda28b83be738c8986718ba5b26f88accca38c82c0888b8b8f718ba5b26f88accca38c82c0888b8b8f718ba2b27087a9cba28c80c2928a8c91718ca2b07086a7caa08c7dc19d8a9091728ca2b07086a5c99e8d7cc0a78a9194728ca2b07084a3c99d8c7cc1af8a949a728ca2b07084a3c99d8c7cc1af8b949a728ca1af70829fc89b8c7bbfb48a9799728ca0af717f9bc79b8c79bcb68a9b9a728ca1af707e98c79c8c78bbb98c9aa1728ca3ae717c97c69d8d77bfb98a97a7728ca3af717c97c69d8d77bfb98a97a7728ca1ae727a95c59d8c77c1b98994a3728da3ad747892c49c8d77bebc898ba4738daaad767791c69b8d77bbbd8a8da7738dabac777791c59a8e77b5ba8b91a5738dabac777791c59a8e77b5ba8b91a5738daea977768dc5988e77acb98c8ca4738eb89d77758bc4968f78a2b8887e7c738ec0977a748ac4978f78a3b4807879738ec79282738bc69d8f7ba3b27b746e738ec79282738bc69d8f7ba3b27b746e738fcb91857387c59f907ba3b37a70717390cc91867385bfa5907c9fbb7a6c697390c8918b7383bda9917c9fac7969647491ba998c737db5aa937ba294736a5f7491ba998c737db5aa937ba294736a5f7491a5a48c7378b1a992799f8a6e695e749197b18a7276a8a89279997a6c6c5c749299b38a7276a2a694788c716c6b5c74939cb787727596a1977a866c6a6b5874939bb787727596a1977a866c6a6b58749494c58472748d9e987b856b676b58749590c97e7273909d9b7b826c686b5574958fcf7c73728f9c9c7c816b666b56749591cd78737388989d7e816a6a7557749591cd78737388989d7e816a6a7558749690cc77757284969d80806b686f5b74968fcd727e727f919f857b6f666a5b749690c97284727c91a4887b766a6a5d74978fc6708a72738daa8c7c716a656074978fc6708a72738daa8c7c716a6560749790c56f8d726d8cab8e7f6c6a6063749890c66d90726b8dae927f697d6067749890c16c9372698aad967f6c825d68749990ab6b9672578cac9a7984886369749990ab6b9672578dac9a798488636974988fa46c9a714f87ae9c759a90666873988ead6b9f715ca5afa06dac96646273988ea76ea17163adaea371ac93655f73978f8c70a6705da6ada76db9876a6072978f8c70a6705da6ada76db9876a6072978f8372a87060a3aca769af876f5d72978e8471ac706aa0aca56fb98d856371968d8073af6f6f99aea67dbb908c5572968c7378b06e708faf9d89b39aa25872968c7378b06e708faf9d89b39aa25872948c6f7cad6d708fb0a690ac9ca77172928b6c80aa6c748fb2a981aea4aa897b90706c82a46b7893b4ab82aca8ada58a8e6f6d859e6a769ab69a97a3a9a0b68a8e6f6d859d6a769ab69a97a3a9a0b68e8c6e6d949b6971a3b890a097ab94c0937e6e6d9e9d6770aebba7a793c163b29a716d6daa976670b5beafac7ec45bcaa4706d6dba90676dbcbeb8b286bd72bba4706d6dba90676ebcbeb8b286bd72bbad706c6cc083676cc0b9b4a4baa175aab76f6b6cc666666cc6b59290d2a8c2afbe6e6b6cc764666dc8af748ed4b7c4c0c36d6a6ccc65666eceab738cb9beccbec36d6a6ccc65666eceab738cb9beccbec96c6a6bcd65686ed1ab768eb9bebd84cb6b6a6ad268686dd6ab7b8ab8a79076cd6a6969d56b676dd7aa8389bda98374cb696869d36e676cd7ab8986b9af7677cb696869d36e676cd7ab8986b9af7677c1686669ce6d686ec6ab908cadb076769b666568c16e6870a3ac9286b2b1767295656468be6e6770a7ad9085b8ac747488646368b771666bafad9277b7a9738088646368b771666bafad9277b7a973806562636a7672656593af926eb77371875360626b4679626052b28665b36f778f535d616b3f7d615d50b47d60af6b8295545b5f6c3a80615c52b47b69886a97a3545b5f6c3a80615b52b47b69886a97a3545a5e6b3a83605a53b37c7466699fa553585e6b3d87605954b17a865f6aafa353575f6c3f88635955af7e955d6cb39252575f6c408d655456ad849c5c8ab39752575f6c408d655456ad849c5c8ab39752565e6f428f685357ad859f5d9fada650555a71459568495aae7fa161af93574e54577144996d425bae7fa262b18a4d4d54567145ab72475cad8d9f61b071534d54567145ab72475cad8d9f61b071534c53556e45b573475cae939e62ad6d574b50546b47bb794b5eae989972ae6a5e4a4f535947bc7d505eaf9c899ca86b604a50544848cb876362b0a164a5956b624a50544848cb876362b0a164a5956b624a5054414dcd887064b1a43fa7766b614752544057ce89676cb1a42faa6c6b4b465253525ccf8f646fb1a43baa6a6c5b4853535461cf957c72b1a243a76983674853535461cf957c72b1a243a76983664b53516e63cf968072af9f4ba06a966e5150503564ce9b7072ae9f50856c9a895652503169cea86f74ad9f4d6f6da0884f53533562cebb796caca04d5e6fa78f4f53533562cebb796caca04d5e6fa7903f5454365ccec0805baca14b5b6fa99c3955553b4fcdc9874faba24e5a71aba23856563a4fcdc97c4aaba3485a71aea53b57573b55cdca6555aba4435b87b3a83b57573b55cdca6555aba4435b87b3a83e57583b57cdc95159aba3415d8eb3a53b5a5c3e56cdc95640aaa2475493b2a33a5c5e4057cdc95932aba3485094b19e3d5e63425ccdca5f31aba64c4e9399663e5e63425ccdca5f31aba64c4e9399663c6266475ccdca612baaa64d48908c5d4263694959cdca5e2aaaa5405491875c48656a4c54cdca5f2aa9a53a598c835c4d696c5665cdca6630aaa6355b8581614d696c5665cdca6630aaa6355b8581614c6b6e5761cdca652eaaa5375b8580644d6d705d5fcdc97741a9a5436186806a4f70726263ccc9784baaa54a6187816d517275665fccc97952a9a5535e868270527275665fccc97952a9a5535e8682705373786760ccc97b59a9a4545c85816f55767a6866ccc97d63a9a55b5c85806257797d696accc97e65a9a5605685805d5b7c7f696ccbc98167a8a5675384805b5b7c7f696ccbc98167a8a5675384805b5c7d81696ccbc98268a8a56c4f8481585f7e836a6dccc9876ba7a471528583586181856c6dccc9886da7a575538785566484886d6acbc99770a6a4785786845b6484886d6acbc99770a6a4785786855b66868a6f6ccbc9a370a5a3795b86855e698a8c716ecbc9876fa5a3785f86855e6c8c8e7270cbc97e6ca4a2785e878660708f907474cbc97669a5a3795c888763708f907374cbc97669a5a3795c88876370afaf7575cbc9756aa3a2795988866573b0ae7478cbc9776ea2a07a5988846273b0ae7575cbc97470a2a17a5889855f72b0ad7669cbc96d72a2a17d5289865a72b0ad7669cbc86d72a2a17d5289865a73b0ac7857cbc86a77a0a07e4f89865778b0ab7e5ccbc8717ba09f7f5689855485afab815fcbc8797aa09f8156898553b1afaa8975cbc88a799f9e8452898656b1afaa8975cbc88a799f9e8452898656b4afaa9584cbc890799f9e8453888559b4aeaaa6a6cbc8a07c9e9d825c888460b5aea9a5bdcbc8ae7e9f9e805e888561b6aea9a5c9cac8b284a1a1816187866cb6aea9a5c9cac8b284a1a1816187866cb6ada9a4c9cac8b481a1a38264868670b6ada8a4cacac8b57ea4a6836887886cb5ada7a2cbcac8b67ca8aa836888886db4aca69fcdcac8b77aa9ae826488886eb4aca69fcccac7b67aa8ae826488886eb4aca69eccc9c7b678abbc826387876cb5aca69ecdc9c7b879bcc47f63878669b5aba69ecec9c7b97dc0cb806187866ab5aba69ecec8c6ba84c3d28062858573b5aba69ecec8c6ba84c3d28162858573b5aba59dcdc8c5bb8ac7d58166838378b6aaa5a0cec7c4be93cad4867284827bb8aaa49fcec7c4c097cbd38a7483817bbba8a4a0cec6c3c29dcbd1907681827bbba8a4a0cec6c3c29ecbd1907681827bb9a8a4a0cdc5c3c1a5cbd0977b80897abaa7a4a2ccc4c2c1b9c9cea98285cf79b9a7a3a2cbc4c1c0c1c8cdb688a2d27cb7a7a3a5cbc3c1c0c6c8ccc7aebed5ceb7a7a3a5cbc3c1c0c6c8ccc7aebed5ceb6a7a3a6cac3c0c0c6c7cbc8b6c6d5d1b5a6a3a9c9c2c0bfc7c7c9c8c0ced6d4b5a6a3a9c9c2bfbec6c6c9c6c1cfd6d3b5a6a3a9c9c1bebdc6c6c8c5c4d1d8d5b5a6a3a9c8c1bebdc6c5c8c5c4d1d8d5b5a6a3a7c8c1bdbdc6c4c7c2c5d0d7d5b4a6a3a7c7c0bdbcc4c4c5c0c9d1d5d2b4a6a3a7c7c0bcbcc4c3c4bfc8d1d4d4b4a6a3a7c7bfbcbcc4c2c3bec7d0d4d4b4a6a3a7c7bfbcbcc4c2c3bec7d0d4d4b4a6a4a7c6bebcbbc3c1c2bdc5cfd4d4b4a6a4a7c6bebbbbc2c0c1bbc9d0d4d3b4a7a4a7c6bebbbbc1bfc0bac7d0d4d3b4a7a5a8c6bdbbbbc0bdbfb8c4cfd4d3b4a7a5a8c6bdbbbbc0bdbfb8c4cfd4d3b4a7a5a8c5bdbbbabebabdb4c3cdd3d3b4a7a6aac4bdbbbabbb8bab1c4cdd1cfb4a8a6aac4bcbababab7b8afc4cdd1cfb4a8a6aac3bcbabab8b5b6adc2ccd1d0b4a8a6aac3bcbabab8b5b6adc2ccd1d0b5a8a7abc3bcbab9b6b3b4acc1cbd0d0b5a8a7abc3bcbab9b5b1b3abc2cccfceb5aaa8abc3bcbab9b5b0b2abc1cbcfceb5aaa8abc3bcbab9b4afb2adc0c9ceceb5aaa8abc3bcbab9b4afb2adbfc9ceceb5aba8abc3bbb9b9b4aeb2adbfc8cdcfb6abaaacc2bbb9b9b6b0b6b0bfc7cbccb6acaaacc2bbb9b9b8b1b9b2bfc7cbccb6acaaacc2bbb9b8b9b2bcb5bfc6caccb6acabacc2bbb9b8b8b2bcb5bfc6caccb6acabacc2bbb9b8bab5beb7bfc6c9ccb7adabacc2bbb9b7bdb9c1babfc6c8c8b8adacacc2bbb9b7c0bbc7bcbfc6c8c7b8adacadc1bbb9b7c4bfcbc4bfc5c7c5b8adacadc1bbb9b7c4bfcbc4bfc5c7c5b8aeacadc1bab8b6c9c3cdc9bec4c6c5b8aeadaec1bab8b6d7caced0bfc4c5c1b9aeaeaec1bab8b6dbd0cfd4bfc5c4c0b9afaeafc1bab8b5ded7d3d9bec4c4c0baafaeafc1bab8b5ded7d3d9bec4c4c0baafafb0c0bab8b4dfdad6dbbec4c3c0baafafb2c0bab7b2e2dedaddbfc4c3bfbbb0afb3c0bab7afe4e0dbddbfc2c2bfbbb2b0b4c0b9b6ace3e2dddcbec1c2c0bbb2b0b4c0b9b6ace3e2dddcbec1c2c0bbb2b0b4bfb9b4aae3dfdddabec0c1c0bbb3b2b4beb8b2a9e2dadbd5bec0c0bfbbb3b2b5beb6b0a7e0d9d7d2bec0c0bfbcb4b4b5bdb5afa6ded9d4d1bdbfc0c0bcb4b4b5bdb5afa6ded9d4d1bdbfc0c0bcb4b4b5bcb4aea5dddad4d0bdbfc0c0bcb4b4b5bcb3aba4dddad3d0bebfbfc0bcb4b5b5bbb2aaa2dcd9d4d1bebfbfc0bcb5b5b5bab1a8a1dbd8d6d4bebfbfc0bcb5b5b5bab0a8a1dbd8d6d4bebfbfc0';
+  // The same data for the portrait clip (img/video/villa-hero-mobile-k5.mp4, 816x1440 crop x=872 of the master, 292 frames):
+  // CLIP_REL measured on the crop of the master, CLIP_BRIGHT on the portrait encode itself - the same methods that give
+  // the landscape values above exactly (sharpness: Laplacian variance at half size vs the median of the 15 surrounding
+  // unique frames; brightness: 80th percentile per cell of a 4x4 grid over the portrait frame at quarter size).
+  var CLIP_REL_PORTRAIT = '102,99,95,97,91,91,98,102,101,99,98,103,98,98,106,106,107,102,97,101,95,96,103,103,106,104,100,104,98,97,102,101,102,101,95,105,98,97,101,102,104,99,96,104,99,97,100,102,104,99,95,106,99,92,101,106,104,95,98,108,99,95,101,105,104,93,97,108,96,93,101,107,107,95,95,106,92,94,102,108,105,100,98,104,97,99,100,101,96,95,98,104,95,99,103,104,100,98,97,103,99,98,103,104,100,104,95,110,98,98,95,106,100,97,92,99,89,91,94,101,96,101,100,108,96,98,106,118,112,110,102,112,93,100,98,100,95,98,102,108,99,103,104,102,100,100,94,107,97,100,99,105,97,106,93,109,91,96,104,99,99,105,91,109,100,97,99,101,95,106,88,107,79,82,87,86,87,86,96,101,91,108,100,104,95,103,100,101,97,104,114,109,110,108,99,103,97,95,103,103,106,104,94,103,100,96,103,100,103,97,93,106,105,94,102,101,99,102,92,107,102,90,108,101,102,93,88,103,97,92,98,101,99';
+  var CLIP_BRIGHT_PORTRAIT = '84928a7892c9b3cb76948f987590797e84928a7892c9b3cb76948f987590797e8692897992cab1cb77968f98738c797b8893857993ccafca7c959096718c79798894857993cfaeca80949197718d79778895837b93d0aacb868d9298708674648895837b93d0aacb868d9298708674648895837c92d2abca8a89929a707c725e8798837e92d1a9ca9185909c71746d60879c868192d1a9ca9382919b71706e63879f888693d1a9cb977e919d6f6b7267879f888693d1a9cb977e919d6f6b7267869f889492d0a6cb9b7e909e6c6b746986a28ba190cea7cc9f7c8fa06a70796e86a48ca590cfa7cca07d8fa067727b7086a78fab90cda9cda37c8fa065747e7386a78fab90cda9cda37c8fa065747e7386a88fac90cca7cea57a8f9f6576807486a891ae8fcca8cfa8788e9d6678817686a894b091c8a8d0aa788e9c687a827986a895af91c6a8d1ab748e9b697b847b86a895af91c6a8d1ab748e9b697b847b85a796ae91c5a8d0ae738f996a7c857c85a598ac91bfa8d1ae6e8f986a7d867e85a499ab8fb8a7d0ac6d8f986b7d877e85a39aaa90b4a7d0a76c91976c7d888085a39aaa90b4a7d0a76c91976c7d888085a39ca990b0aacea16c91956f7e878185a19da890a5abce9b6b9192737e8782859fa0a78ea0adcd976a9290747f8684859da4a68f97b2c99369928e77808782859da4a68f97b2c99369928e77808782859ca6a58d96b1c78d69938b79808880849ea5a48e96b0c18a6a92887a82897e839ea8a38f95adbf876991867b838a7e82a1a7a38e96adbe866d90847d858b7f82a1a7a38e96adbe866d90847d858b7f82a0a9a28e97aabb856c91837f858b80819db0a38d93acb9836c918381868d81819ab6a18d91b0b6836c928380868e828198c3a18c8fb9b3856b928282888f838198c3a18c8fb9b3856b928282888f838194cca18b8dbeab856b927e82889084818fd5a08b8bc4a7856b927c828891838290d59f8b8cc4a5866c917c818891848191d6a08c8dc2a28a6d8e7c818991848191d6a08c8dc2a28a6d8e7c818991848190d69f8d8cbea28a6d8e7a828a93858092d99e8c8cbf95896e8a7a828b93858193d99d8b8dc19987708979848b94867f94d9a18a8dbe9d8773847c848c95877f94d9a18a8dbe9d8773847c848c95877f93d6a38a8dab9e8775817e858c96877f93c4a98b8e96a188727c82868d97877e92b7b58b8d8ea289727986878e97867f939cc48b8b8da68973738e898e98887f939cc48b8b8da68973738d898e9888809396ca8b8b92a28a74718d898e9b8781949ad18a8a969c8876708a89909e89829698d7898b9397877971898991a08982978cdb868a8da5877a6d8e8a92a58a82978cdb868a8da5877a6d8e8a92a58a84967ddb85878daf86796a928a92a88c85946bdb848689b4857969928895a988859569db83858ab1877969918499a68686956adb82848bb288786a8e7c9b948086956adb82848bb288786a8e7c9b948087966cda818489aa89796b87799b9082899673d87f83879b8b7b6b8078a190828a9675d67d8086898b7d6e7c77a493848b947ace7a7f87838b7f6e757fa6988d8b947ace7a7f87838b7f6e757fa6988c8c937ccd777d86858b7e727187a899878c937ccf757b85878c7f7b6b889b80758c937cc5747a84838d7f7f6a879272718d927d887378827f8c7d8369888869658c927d887378827f8c7d8369888869658d937f7373787e788a7e82698983675b8d93827273777d7a887f8468898068588d94837d72777b7c89808667847c665a8d9386817276787d877f8b657b7161648d9386817276787d877f8b657b7161648e9289817276777a847e8a636f6d5d668d928c80727576777d808d67726c5c6d8d928d83717476767c81906a726b58738d928d86717375777a848e6f7465527d8d928d86717375777a848e6f7465527d8e928e88707375777a8a8c78716254868e94928a707374767c938d7a775a5c8a8e93938d7072747581998f7a705364858e929190707274758498907a6e5877948e929190707274758498907a6e5877948e92908d70727374819894796a5e70798f91908c6f7173738a999b7f5a6570748f90908c6f717272989b9e87566e7975908f8f8f70707272a59d9c8f5d747969908f8f8f6f707272a59d9c8f5d7479699190908e70707272a2a39d9763776a649190928d706f7172b2a399a5798362669190928e706e7172b39f9faa82835a609390908f776c7072a29ea2b3a17462639390908f776c7072a29ea2b3a174626393908f8d856b7072a0a0a5b5a7756366938f908c946a7071a69fa9b98b766a62948f8f8c9c696f71aaa1a8bf85716d5d958f8f8ca9686f71aea49ec67e757c63958f8f8ca9686f71aea39ec67e757c63958f8f8dac676f71b1a194c77e7b9f6a968f908cb0676e71b59e88c37f94a67f968f8e8db1676c70bca185b4829aa986968f8d8cad666b6fc0a17e7b9fa4b291968f8d8cad666b6fc0a17e7b9fa4b291958e8d8cab666a6fc1a47e6da2a7b29a918d8e8ca966676dc1aa8074b2aaada38e8d8d6fa367656cc2ae817cb6a6aea18b88716ea077646bc2b68b88cb9b938d8b88716ea077646bc2b68b88cb9b928d8871706d9e846469bfba928fce8a818e7171716e9b976266b2bea1a6cc9483307070706c959a6164b0bfb2b0809577337071706c969e5f63afc0c0bd779a7a597071706c969e5f63afc0c0bd779a7a5970706f6c8fab5f63afc0aeb574a57d716f706c6b8cc35a66b3c28da59bbccaa96f6f6a6b83c85668b0bb717cafbdd8c16f6e6a6b85cb5768a4bc6c7cbec4d3c96f6e6a6a85cb5768a4bc6c7cbec4d3c96f6b696a76cd5968a0bc6e7fbbb9b2bc6d6b686a79cd5a689bbd747fb1a69e856c69666976ce5a6899be7983b1a5907d6c69666876cf5c6a96bf828bb3a2827a6c68666976cf5c6a96bf828bb3a2827a6b68666672cf5d6b96c08c93b29c7f746968646570d05f6998c19590b09e7777666763646dd0626898c19887b0957476666563636ed2646897c2a079ac727372666563636ed2646897c2a079ab727372656461646fd2666698c3a26d6f7070756361616371d366659bc49f676f6f717c615e5e6272d36a5c9fc49e5c696e71865d5c5c5e72d38349a3c39f50676d78a05d5c5c5e72d38349a3c39f50676e78a05b5a5a5a72d48d44a6c1a04d666f90a258585a4e76d49839a8c0a243699796a05758595877d49c3fa8bea4486aa6a3ab5658595c7dd4b147a2bea9459daeb2b35658595c7dd4b147a2bea9459daeb2b35658585c87d4bd4a9dbfac46afb1b4a55557575d91d4c0529ac0b24cb2b6b48c5456575a9ed4c4589dbfb451b2b694855556565caed4c9659dc0b661b4ac8c6c5456565cb0d4c9669dc1b661b4ac8c6c53555559b6d4cb639dc1b66db1978e6a50545355bad4cf649ec0b77ca391716a4f535253bad4d165a1c2b8819777716a4f535353bcd4d166a3c2bb906f74716b4f535353bcd4d166a3c2bb906f74716b4f545352bdd4d165a1c2bc916c7b706b51555452ced3d167a3c1bc856e8e6f6851555550cfd3d16ea6c2bb816c91756753575650d0d2d274a9bfbb776c918c7753575750cfd2d274a9bfbb776c918c775357574dcfd2d273a9bdba706d9094975156574ccfd2d178a9bcba6c718e97a35256574ecfd2d17ea9bcba6e718d9fa753575751ced2d189a8bbb9737191a4ad53575751ced2d189a8bbb9737191a4ad54575753ced2d189a9bbb9737195adb054585a55ced2d18da9bab9727297b4b1555b5c56ced2d191a9bab8747199b7b3575d5e5aced2d1a7a8bab87b7b9eb9b9575d5e5aced2d1a7a8bab87b7b9eb9b8585f615cced2d1bea7b9b77d8fa8b9b75c626361ced2d1c6a5b9b68794aeb9b45d636563cfd2d1c6a6b9b78e97afb89a5f656866cfd2d1c6a6b8b6979ca4ab8d5f656866cfd2d1c6a6b8b6979ca4ab8d62686a68cfd1d1c6a7b8b59b9f979c87646a6c6acfd1d1c7a7b7b59da9949b85666c706ccfd1d0c7a6b6b59d939296816b707270cfd1d0c7a6b6b5a0878e8c826b707270cfd1d0c7a6b6b5a0878e8c826d737370cfd0cfc8a5b4b3a0898c8d8171757873cecfcfc8a4b3b39f8b8b898072777b77cecfcec9a5b3b2a08a8c8981727c7e79cecfcec9a4b2b29f898c8783727c7e79cecfcec9a4b2b29f898c8783767e807acecfcec9a3b1b19f898b87827a81847ececececaa3b0b09f8c8a87817c848680cfcecdcaa2b0af9f8c8986807e858b83cececdcaa3afaf9e8e8989837e858b83cececdcaa3afaf9e8e8989837e868b84cececdcaa3adae9d8d89898680898c85cececdcaa4acac9b8c888987828b8d86cecdcccaa5acad9b8d888988848c8e88cecdcbcaa5abac9c8c89898a848c8e88cecdcbcaa5abac9c8c89898a858d8f88cecdcbcaa5abab9c8d88898d888e908bcecccbcaa5abab9e8e87888c8a8e908bcecbcbcaa5a9aa9e8d8a888c8d8f928ecdcbcbcba6a9aaa18c8d878a8d8f928ecdcbcbcba6a9aaa18c8c878ab2aeadafcdcbcbcba5a9a9a08d8d878ab1aeadaecccbcacaa4a6a7a08f8a8887b0aeadadcccbcacaa5a6a7a1918a8a88b0adacaccccbcacaa5a6a6a38f8a8a87afadacaccccbcacaa5a6a6a38f8a8a87afacababcbcacacaa4a5a5a18e888987aeabaaaacbcac9c9a4a5a6a28e878986aeaba9aacbcac9c9a4a6a6a28e878986aeaba9a9cacac9c9a4a6a8a38d8b8886aeaba9a9cbcac9c9a4a6a8a38d8b8886aeaba9a9cbcac9c9a6a8aca58d8c8987adaba8a9cbcac9c9a7a9aca88d898786adaaa7a8cacac9c9a8abacad8d898888ada9a7a7cacac9c8a9acb4af8a88898aaca9a6a8cacac9c8a9acb4af8a88898aaca8a6a7cac9c9c8a9abb7b68a878b8caca7a6a7cac9c8c8a9acc2be8c8a8a8caca7a6a6cac9c8c8abb5c4c08c8b898caba6a6a6c9c9c8c7abbbc6c08989888caba6a6a6c9c9c7c7abbbc6c08989888caba6a6a6c9c8c7c7bcbfc6c48888868aaba6a5a6c9c8c7c7bcc2cccc87868588aaa6a5a6c9c8c6c7bec3d0d187858488aaa6a5a5c8c7c5c6bfc6d2d484838386aaa6a5a5c8c7c5c6bfc6d2d484838386a8a6a4a4c7c7c5c5c0cbd6d583828285a8a5a4a4c7c5c4c4c7ccd5d582828082a7a5a4a4c6c5c4c4c9ced4d482828181a7a4a3a3c5c4c3c3caced1d380818482a7a4a3a3c5c4c3c3caced1d380818482a7a4a3a3c5c3c3c3cacdcfd27f82b185a6a4a3a3c4c3c2c2c8cccecf82acd2d1a6a3a3a3c4c2c1c2c8cbcccf88c3d5d4a6a3a3a3c3c2c1c1c7cbccccb0ccd8d7a6a3a3a3c3c2c1c1c7cbccccb0ccd8d7a6a3a3a3c3c1c0c0c7cacbcbbed0d6d6a5a3a3a2c2c1c0c0c6c8cacac9d4d7d6a5a3a3a2c2c0bfbfc6c7c9c9ccd5d7d7a5a3a3a2c1c0bebfc6c7c8c9ced6d8d9a5a3a3a2c1c0bebec5c7c8c8ced6d8d9a5a3a3a2c1bfbdbec4c6c7c8ced6d7d8a5a4a3a3c0bebcbdc3c5c6c6cfd6d7d5a5a4a3a3bfbdbcbcc2c4c5c4d1d4d3d4a5a4a3a3bfbdbcbcc1c3c5c3d1d2d4d4a5a4a3a3bfbdbcbcc1c3c5c3d1d2d4d4a6a4a4a4bebcbbbcc0c1c3c2d1d1d4d4a6a4a4a4bebcbbbcbfc0c2c1d3d2d4d4a6a4a4a4bebcbbbcbebfc1c1d2d2d4d4a6a5a5a5bdbcbbbbbcbec0bfcfd2d4d3a6a5a5a5bdbcbbbbbcbec0bfcfd2d4d3a6a5a5a5bdbbbabbbabbbebeced1d3d3a7a5a5a5bdbbbabbb8b8bcbbcdd1d3d2a7a6a6a6bcbbbabbb6b7bab9cdd1d3d2a7a6a6a6bcbbbabbb5b5b8b7ccd0d2d2a7a6a6a6bcbbbabbb5b5b8b7ccd0d2d2a7a6a6a7bcbbbabbb3b3b6b5cacfd2d1a8a7a7a7bcbab9bab2b2b4b2cbd0d1cfa8a7a7a8bcbab9bab0b0b4b2cbcfd1ceaaa8a8a8bcbab9baaeb0b2b2c9cecfcdaaa8a8a8bcbab9baaeb0b2b2c9cecfcdaaa8a8a8bbbab9baadafb2b3c7cccdccaaa9aaaabbbab9b9afb3b2b7c7cbcecbabaaaaaabbb9b9b9b0b4b4bbc7cbcdcbabaaabaabbb9b8b9b2b4b8bec6caccc9abababaabbb9b8b9b2b4b8bec6caccc9acabababbbb9b8b9b4b6babfc6c9cbc9acabababbab9b8b9b8babcc0c6c9c9c7acabababbbb9b8b9babdc0c5c6c8c9c7adacacacbab9b8b9bfc1c6c9c5c7c8c5adacacacbab9b8b9bfc1c6c9c5c7c8c5adacacacbab8b7b9c1c6cac9c5c6c7c5adadadadbab9b7b9c6d0cfc8c5c6c6c5aeaeaeadbab8b7b9c9d6d1cbc4c7c5c5aeaeaeaebab8b7b9ccded8d1c4c5c4c4aeaeaeaebab8b7b9ccded8d1c4c5c4c4afaeafaebab8b7b8cee1d8d5c3c5c5c4afafafafbab8b6b8cfe6dcdac3c5c6c2b0afb0afbab8b6b7cee8dddbc1c5c5c1b0b0b0b0b9b7b6b7c7eadddec0c4c3c1b0b0b0b0b9b7b6b7c7eadddec0c4c3c1b0b0b0b0b9b6b6b5c4eadde0c0c1c1c0b2b2b2b2b8b4b4b3c4eadedfbfc1c1c0b2b3b3b2b6b4b3b2c7e8dbdabfc0c0bfb3b4b3b4b5b2b0afcde3dad7bfc0bfbfb3b4b3b4b5b2b0afcde3dad7bfc0bfbfb3b4b4b4b4b1afaed0e0dbd5bfbfbfc0b4b4b4b5b2aeabaad1dedcd3bfbfbfbfb4b4b4b5b1acaaa9d1dddbd3bfbfbfbfb4b4b4b5afaaaaa7cfdad9d6bfbfbfbfb4b4b4b5afaaaaa7cfdad9d6bfbfbfbf';
+  function portraitClip() { return video.videoWidth === 816 && video.videoHeight === 1440; }
 
   // Camera tuning (positions per second; real speed of the villa clip = 24 positions/s)
-  var V_MIN = 16, V_MAX = 120, ACC = 140, BRAKE = 70;
-  var IDLE_MS = 140;       // scrolling counts as stopped after this pause
-  var REST_R = 4;          // when stopped, look this many positions either side for a sharper frame
-  var GLIDE_MIN = 3;       // while scrolling slowly, move in glides of at least this many positions
+  var V_MAX = 120;         // top speed (touch devices: lower, see below)
+  var TAU = 0.30;          // s, glide of the target: the camera's weight and the length of the coast after a stop
+  var OMEGA = 9;           // 1/s, how closely the camera follows the gliding target (critically damped: no overshoot)
+  var TAU_PUSH = 0.08;     // s, the target's speed reaches the camera as a push that builds up (no jolt per wheel notch)
+  var A_MAX = 300;         // positions/s^2, acceleration limit (reached gradually)
+  // planned ending (see the header): glide time window, preferences and the sync window
+  var REST_R = 4;          // the resting frame lies within this many positions of the scroll position (sync window)
+  var T_MIN = 0.35, T_MAX = 2.4, T_PREF = 0.9;   // s, glide time limits and the preferred glide
+  var A0_CAP = 80;         // positions/s^2: acceleration carried into the glide (more is dropped after abrupt input)
+  var SLOW_IN = 5;         // positions/s: scrolling slower than this (a momentum tail, a crawl) counts as stopped
+  var STEP_HOLD = 60;      // ms, wheels without smooth scrolling jump per notch: a gap this short is not a stop yet
+  var LAND_V = 9;          // positions/s at the last visible frame change of a glide (~110 ms per frame)
+  var LAND_RATIO = 1.25;   // while landing, each frame interval is this much longer than the one before
+  var LAND_N = 3;          // positions before the last visible change that follow that ratio exactly (the landing zone)
 
   var U = [], REL = [], LX = 0;      // timeline: U[i] = source frame of camera position i
-  var knownClip = false;
+  var knownClip = false, clipBright = CLIP_BRIGHT;   // clipBright: CLIP_BRIGHT of the clip playing (set with the timeline)
   var ready = false, inView = true, raf = 0, lastT = 0;
   var reduce = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
@@ -69,7 +101,8 @@
 
   function buildTimeline(frames) {
     U = []; REL = [];
-    var rel = CLIP_REL.split(',');
+    var portrait = portraitClip(), rel = (portrait ? CLIP_REL_PORTRAIT : CLIP_REL).split(',');
+    clipBright = portrait ? CLIP_BRIGHT_PORTRAIT : CLIP_BRIGHT;
     var known = knownClip = frames === CLIP_FRAMES;
     for (var f = 0; f < frames; f++) if (!known || f % 5 !== 1) U.push(f);
     for (var i = 0; i < U.length; i++) REL.push(known ? +rel[i] / 100 : 1);
@@ -93,6 +126,9 @@
   // itself, so a change restyles only the hero (on <body> it restyles the whole page); desktop keeps <body>.
   var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
   var varHost = hero;
+  // Touch devices: the portrait crop shows ~665 of the clip's 2560 px, so one camera step moves the picture ~2.2x more
+  // (relative to the screen) than on desktop. A lower top speed keeps the fastest on-screen motion equal to desktop's.
+  if (MOBILE) V_MAX = 56;
   // All devices: the floating WhatsApp button (.wa-fab) stays hidden while the video is in progress (.is-playing
   // on the hero, see css/hero-video.css) and returns once the final frame has been painted.
   function fabHold(on) { hero.classList.toggle('is-playing', on); }
@@ -138,7 +174,7 @@
     for (var row = 0; row < 4; row++) for (var col = 0; col < 4; col++) {
       var a = Math.max(0, Math.min(x1, (col + 1) / 4) - Math.max(x0, col / 4)) * Math.max(0, Math.min(y1, (row + 1) / 4) - Math.max(y0, row / 4));
       if (!(a > 0)) continue;
-      var cell = parseInt(CLIP_BRIGHT.substr(base + (row * 4 + col) * 2, 2), 16);
+      var cell = parseInt(clipBright.substr(base + (row * 4 + col) * 2, 2), 16);
       var cy = (Math.max(y0, row / 4) + Math.min(y1, (row + 1) / 4)) / 2 * vh - oy;
       var f = fadeAt(cy / sr.height) * sd;
       sum += (cell * (1 - f) + 233 * f) * a; wsum += a;
@@ -168,6 +204,10 @@
     requestAnimationFrame(function () {
       busy = false;
       if (shown === U[LX]) fabHold(false);        // final frame is on screen: the floating button may show again
+      // At ~30 Hz or less (Yandex power saving / simplified mode, slow devices) start the next seek in this frame: waiting
+      // for the next frame's tick would allow only one new video frame per two animation frames (15 per second at 30 Hz).
+      // At 60 Hz and above the gate stays as it was (measured: earlier seeks there cost a few missed frames).
+      if (fgap > 25) pump();
       updateShade(); schedule(); toneLater();     // the next seek is not held up by the header read (it runs in its own task)
     });
   });
@@ -184,47 +224,146 @@
   window.addEventListener('pageshow', function (e) { if (e.persisted) revive(); });
 
   // ---- cinematic camera
-  var pos = 0, vel = 0, goal = 0, restGoal = null, lastScrollT = 0;
-  function restPoint(x, r) {                     // sharpest frame near x, only ahead of the moving camera
-    if (x <= 0.5) return 0;
-    if (x >= LX - 0.5) return LX;
-    var c = Math.round(x), best = c, bestScore = -1e9;
-    var lo = Math.max(1, c - r), hi = Math.min(LX - 1, c + r);
-    if (vel > 0) lo = Math.max(lo, Math.ceil(pos)); else if (vel < 0) hi = Math.min(hi, Math.floor(pos));
-    if (lo > hi) return vel > 0 ? Math.min(LX, Math.ceil(pos)) : Math.max(0, Math.floor(pos));
-    for (var i = lo; i <= hi; i++) {
-      var s = REL[i] - 0.015 * Math.abs(i - x);  // sharper is better, nearer slightly better
-      if (s > bestScore) { bestScore = s; best = i; }
+  var pos = 0, vel = 0, acc = 0, lastDir = 0, fgap = 16.7;          // camera; the browser's frame interval
+  var sm = null, push = 0;                                            // follower: gliding target and its push
+  var plan = null;                                                    // planned ending (glide to the resting frame)
+  var gPrev = null, gSpeed = 0, lastInT = -1e9, lastFastT = -1e9, stepIn = false, inGap = 17;   // scroll input tracking
+  var K_SM = 1 - Math.exp(-0.004 / TAU), K_PUSH = 1 - Math.exp(-0.004 / TAU_PUSH);   // per 4 ms sub-step
+
+  // Quintic from (p0, v0, a0) to (p0 + D, v1, a1) in T s: continues the current motion without a jump in speed or
+  // acceleration and ends exactly with the given speed and acceleration.
+  function quint(p0, v0, a0, D, v1, a1, T, el) {
+    var s = Math.max(0, Math.min(1, el / T)), v0T = v0 * T, a0T = a0 * T * T, v1T = v1 * T, a1T = a1 * T * T;
+    var c3 = 10 * D - 6 * v0T - 4 * v1T - 1.5 * a0T + 0.5 * a1T, c4 = -15 * D + 8 * v0T + 7 * v1T + 1.5 * a0T - a1T,
+      c5 = 6 * D - 3 * v0T - 3 * v1T - 0.5 * a0T + 0.5 * a1T;
+    var s2 = s * s, s3 = s2 * s, s4 = s3 * s;
+    return { p: p0 + v0T * s + 0.5 * a0T * s2 + c3 * s3 + c4 * s4 + c5 * s4 * s,
+      v: (v0T + a0T * s + 3 * c3 * s2 + 4 * c4 * s3 + 5 * c5 * s4) / T,
+      a: (a0T + 6 * c3 * s + 12 * c4 * s2 + 20 * c5 * s3) / (T * T), done: false };
+  }
+  // The glide: to the resting frame p0 + d with zero speed and zero deceleration (no snap, no brake jolt). With a landing
+  // gate (pl.tb > 0) it has three parts, with continuous speed and acceleration throughout (scrolling again hands back to
+  // the follower without a jump):
+  //  1. a quintic from the current motion to the landing zone, pl.xz positions before the gate;
+  //  2. the landing zone: speed = pl.vg x LAND_RATIO^(distance to the gate), so every frame interval in it is exactly
+  //     LAND_RATIO longer than the one before (acceleration -ln(ratio) v^2); it ends at the gate, half a position before the
+  //     resting frame, where the picture shows the resting frame, at the landing speed pl.vg;
+  //  3. the last half position in pl.tb s, invisible (the resting frame is already on screen), to zero speed and zero
+  //     deceleration.
+  function glideAt(pl, el) {
+    var tb = pl.tb || 0, tz = pl.tz || 0;
+    if (el >= pl.T + tz + tb) return { p: pl.p0 + pl.d, v: 0, a: 0, done: true };
+    if (!tb) return quint(pl.p0, pl.v0, pl.a0, pl.d, 0, 0, pl.T, el);
+    var L = Math.log(LAND_RATIO), dir = pl.dir, pg = pl.p0 + pl.d - 0.5 * dir;   // gate
+    if (el < pl.T) { var vz = pl.vg * Math.exp(L * pl.xz);
+      return quint(pl.p0, pl.v0, pl.a0, pg - dir * pl.xz - pl.p0, dir * vz, -dir * L * vz * vz, pl.T, el); }
+    if (el < pl.T + tz) { var E = Math.exp(-L * pl.xz) + L * pl.vg * (el - pl.T), v = pl.vg / E;
+      return { p: pg + dir * Math.log(E) / L, v: dir * v, a: -dir * L * v * v, done: false }; }
+    return quint(pg, dir * pl.vg, -dir * L * pl.vg * pl.vg, 0.5 * dir, 0, 0, tb, el - pl.T - tz);
+  }
+  // Can the camera reach a resting frame by coasting (or, from rest, by a short settle)? Long catch-ups (page jumps, a
+  // fast scroll back) are left to the follower, which accelerates and cruises smoothly; the glide only ever finishes.
+  function canGlide(g) {
+    var av = Math.abs(vel), near = Math.max(0, Math.abs(g - pos) - REST_R);
+    return av > 1.5 ? 2 * near / av <= T_MAX && (g - pos) * vel > -REST_R : Math.abs(g - pos) <= REST_R + 1.5;
+  }
+  // Choose the resting frame and glide time: sharp, inside the sync window, never behind the direction of travel; a pure
+  // coast (glide time = 2 x distance / speed) is preferred; speeding up and hard braking are penalised. Once per stop.
+  function makeGlide(t, g, a0) {
+    var av = Math.abs(vel), moving = av > 1.5, dir = moving ? (vel > 0 ? 1 : -1) : (lastDir || (g >= pos ? 1 : -1));
+    a0 = moving ? Math.max(-A0_CAP, Math.min(A0_CAP, a0 || 0)) : 0;
+    var v0 = moving ? vel : 0, best = null;
+    for (var r = Math.max(0, Math.ceil(g - REST_R)); r <= Math.min(LX, Math.floor(g + REST_R)); r++) {
+      var d = r - pos, ad = Math.abs(d), Ts;
+      if (d * dir < -0.5) continue;                                    // never turn back
+      // landing gate when the camera arrives fast (at least twice the landing speed; slower stops keep the plain quintic,
+      // whose last frames are already slow) and the resting frame is not on screen yet (more than half a position ahead)
+      var gate = av >= 2 * LAND_V && d * dir > 0.6, vg = gate ? Math.min(LAND_V, 0.85 * av) : 0, LR = Math.log(LAND_RATIO);
+      // landing zone: up to LAND_N positions before the gate, as long as the quintic keeps at least one position to
+      // slow down to the zone's entry speed (which must stay below the current speed)
+      var xz = gate ? Math.max(0, Math.min(LAND_N, ad - 1.5, Math.log(0.9 * av / vg) / LR)) : 0, vz = vg * Math.exp(LR * xz);
+      var tz = gate ? (1 - Math.exp(-LR * xz)) / (LR * vg) : 0, tmin = Math.max(0.05, T_MIN - tz);
+      if (!moving) Ts = [Math.min(0.6, 0.3 + 0.07 * ad)];              // from rest: a short ease-in-out
+      else { var Tc = 2 * (gate ? ad - 0.5 - xz : ad) / (av + vz); Ts = [Tc * 0.85, Tc, Tc * 1.2].map(function (x) { return Math.min(T_MAX, Math.max(tmin, x)); }); }
+      for (var k = 0; k < Ts.length; k++) {
+        var pl = { T: Ts[k], v0: v0, a0: a0, d: d, p0: pos, dir: dir, vg: vg, xz: xz, tz: tz, tb: gate ? 1 / vg : 0 }, vmax = 0, amax = 0, back = false, dip = false;
+        for (var i = 1; i <= 24; i++) {
+          var q = glideAt(pl, Ts[k] * i / 24);
+          vmax = Math.max(vmax, Math.abs(q.v)); amax = Math.max(amax, Math.abs(q.a)); if (q.v * dir < -0.3) back = true;
+          if (gate && i < 24 && q.v * dir < 0.85 * vz) dip = true;    // slower than the landing zone's entry speed before it
+        }
+        var sharp = (r <= 0 || r >= LX) ? 1.2 : REL[r];
+        var score = sharp - (back ? 5 : 0) - 0.03 * Math.abs(r - g) - 6 * Math.max(0, vmax / V_MAX - 1.02)
+          - (moving ? 1.5 * Math.max(0, vmax / av - 1.03) : 0)          // no speeding up while coasting
+          - 0.04 * Math.abs(Ts[k] - T_PREF) - 0.3 * Math.max(0, amax - 120) / 120;   // preferred glide, braking comfort
+        if (!moving) score -= 0.12 * Math.abs(r - Math.round(pos));     // at rest: settle on a near frame
+        if (dip) score -= 1;                                             // would slow down and speed up again
+        if (!best || score > best.score) best = { score: score, pl: pl };
+      }
     }
-    return best;
+    if (!best) { var rr = Math.max(0, Math.min(LX, Math.round(g))); best = { pl: { T: 0.5, v0: 0, a0: 0, d: rr - pos, p0: pos } }; }
+    best.pl.t0 = t;
+    return best.pl;
+  }
+  // the follower: a critically damped camera pulled by a gliding target, with soft limits (used while scrolling and
+  // for long catch-ups)
+  function follow(dt, g) {
+    if (sm === null) { sm = pos; push = vel; }
+    for (var h = 0; h < dt - 1e-9; h += 0.004) {
+      var st = Math.min(0.004, dt - h), full = st > 0.0039, prev = sm;
+      sm += (g - sm) * (full ? K_SM : 1 - Math.exp(-st / TAU));                         // gliding target
+      push += ((sm - prev) / st - push) * (full ? K_PUSH : 1 - Math.exp(-st / TAU_PUSH));   // its speed, as a push
+      acc = OMEGA * OMEGA * (sm - pos) + 2 * OMEGA * (push - vel);                       // critically damped follower
+      acc = A_MAX * Math.tanh(acc / A_MAX);                                               // the limit is reached gradually
+      if (acc * vel > 0) acc *= Math.max(0, 1 - Math.pow(Math.abs(vel) / V_MAX, 4));      // approach top speed softly
+      vel = Math.max(-V_MAX, Math.min(V_MAX, vel + acc * st));
+      pos += vel * st;
+    }
   }
 
   function tick(t) {
     raf = 0;
     if (!ready || (reduce && reduce.matches)) return;
-    var dt = lastT ? Math.min(0.05, (t - lastT) / 1000) : 0; lastT = t;
+    var dt = lastT ? Math.min(0.05, (t - lastT) / 1000) : 0;
+    if (lastT && t - lastT < 100) fgap = fgap * 0.9 + (t - lastT) * 0.1;   // the browser's frame interval (seek pacing)
+    lastT = t;
     var g = progress() * LX;
-    var idle = t - lastScrollT > IDLE_MS;
-    if (idle) {                                  // stopped: settle on the sharpest frame nearby
-      if (restGoal === null || Math.abs(restGoal - g) > REST_R + 0.5) restGoal = restPoint(g, REST_R);
-      goal = restGoal;
-    } else if (Math.abs(g - goal) >= GLIDE_MIN) {   // collect small scroll movements into one glide
-      goal = (g <= 0.5 || g >= LX - 0.5) ? g : restPoint(g, 2);
+    if (gPrev !== null) {                        // scroll input: when it last moved, how fast, and whether it jumps per notch
+      var jump = Math.abs(g - gPrev);
+      if (jump > 1e-6) {
+        if (t - lastInT < 150) inGap = inGap * 0.7 + (t - lastInT) * 0.3;   // the rhythm of the scroll updates
+        lastInT = t; stepIn = jump > 3;
+      }
+      if (dt > 0) gSpeed += (jump / dt - gSpeed) * (1 - Math.exp(-dt / 0.1));
+      else if (jump > 1e-6) gSpeed = Math.max(gSpeed, SLOW_IN);   // first frame after a pause: the input counts as scrolling
     }
-    var d = goal - pos, dist = Math.abs(d), dir = d > 0 ? 1 : -1;
-    if (dist < 0.02 && Math.abs(vel) < 1) { pos = goal; vel = 0; }
-    else {
-      var want = Math.min(V_MAX, Math.max(V_MIN, Math.sqrt(2 * BRAKE * dist)));
-      if (dist < 0.6) want = Math.max(2, dist * 8);
-      var dv = dir * want - vel, maxDv = ACC * dt;
-      vel += Math.max(-maxDv, Math.min(maxDv, dv));       // limited acceleration = inertia
-      var step = vel * dt;
-      if ((goal - (pos + step)) * dir <= 0) { pos = goal; vel = 0; } else pos += step;
+    gPrev = g;
+    if (gSpeed >= SLOW_IN) lastFastT = t;
+    // the visitor is still scrolling: input within its own rhythm (per frame, or every few frames on some mice and
+    // trackpads; a notch gap without smooth scrolling), not just a crawl
+    var scrolling = t - lastInT <= (stepIn ? STEP_HOLD : Math.max(1.5 * fgap, Math.min(110, 2.2 * inGap))) && t - lastFastT < 120;
+    if (scrolling) {
+      if (plan) {                                // hand back to the follower with the same speed and acceleration
+        var q = glideAt(plan, (t - plan.t0) / 1000);
+        sm = pos + q.a / (OMEGA * OMEGA); push = vel; plan = null;
+      }
+      follow(dt, g);
+    } else {
+      // stopped: glide to the resting frame (re-plan if the scroll drifted out of the sync window); a long catch-up
+      // first continues with the follower until a coast can finish it
+      if (plan && Math.abs(plan.p0 + plan.d - g) > REST_R + 0.5) {
+        var qq = glideAt(plan, (t - plan.t0) / 1000); sm = pos + qq.a / (OMEGA * OMEGA); push = vel; plan = null;
+      }
+      if (!plan && canGlide(g)) plan = makeGlide(t, g, acc);
+      if (plan) { var p = glideAt(plan, (t - plan.t0) / 1000); pos = p.p; vel = p.v; acc = p.a; sm = null; }
+      else follow(dt, g);
     }
+    if (Math.abs(vel) > 1.5) lastDir = vel > 0 ? 1 : -1;
+    if (pos <= 0 || pos >= LX) { pos = Math.max(0, Math.min(LX, pos)); if ((pos === 0 && vel < 0) || (pos === LX && vel > 0)) vel = 0; }
     target = U[Math.max(0, Math.min(LX, Math.round(pos)))];
     pump();
-    // keep animating while the camera moves, a target is pending, or the scroll may still settle
-    if (vel !== 0 || pos !== goal || target !== shown || !idle || restGoal === null) schedule();
+    // keep animating while the visitor scrolls, the glide runs, or a frame is still pending
+    if (scrolling || !plan || t - plan.t0 < (plan.T + (plan.tz || 0) + (plan.tb || 0)) * 1000 || target !== shown) schedule();
     else lastT = 0;
   }
 
@@ -235,7 +374,7 @@
   function start() {
     if (ready || !(video.duration > 0)) return;
     buildTimeline(Math.max(1, Math.round(video.duration * FPS)));
-    pos = goal = progress() * LX;                // start where the page is (e.g. after a reload mid-page)
+    pos = progress() * LX;                       // start where the page is (e.g. after a reload mid-page)
     ready = true;
     hero.classList.add('is-ready');
     updateSand();
@@ -308,10 +447,12 @@
   // x 20*(u%8), y 24*N + 11*floor(u/8). sample() reads it at the same points its drawImage read the video (the cell each
   // point falls in); everything after that (sand fade, percentiles, thresholds, hysteresis, timing) is unchanged.
   // The file loads with low priority, is decoded off the main thread (createImageBitmap) and read once, in small slices
-  // (a one-off read of this image, not the video). It is used only for the 292-frame 2560x1440 clip and only for the source
-  // it was made from; if it is missing, does not fit or cannot be read, sample() reads the video as before.
+  // (a one-off read of this image, not the video). It is used only for a 292-frame clip 1440 px high and only for the source
+  // it was made from; if it is missing, does not fit or cannot be read, sample() reads the video as before. The atlas width
+  // follows the clip: video width / 16 (2560 -> 160, coarse blocks 20 wide, 8 per row - as before; portrait 816 -> 51,
+  // coarse blocks 7 wide (the last column 48 px), 7 per row), the same layout tools/hero-lum/build.html writes.
   // Regenerate both files together with CLIP_REL/CLIP_BRIGHT when the video changes.
-  var LUM_W = 160, LUM_BAND = 384, LUM_BK = 16, LUM_BH = 24, LUM_AKX = 128, LUM_AKY = 96, LUM_AW = 20, LUM_AH = 11, LUM_ROW = 8;
+  var LUM_W = 160, LUM_BAND = 384, LUM_BK = 16, LUM_BH = 24, LUM_AKX = 128, LUM_AKY = 96, LUM_AW = 20, LUM_AH = 11, LUM_ROW = 8, LUM_VW = 2560;
   var LUM_N = CLIP_FRAMES - Math.ceil((CLIP_FRAMES - 1) / 5);      // unique frames (233)
   var lumData = null, lumState = 0, lumFor = '';                  // state: 0 not requested, 1 loading, 2 ready, -1 unavailable
   function lumLoad() {                                            // lumFor: the video source the table belongs to
@@ -321,7 +462,8 @@
     if (!src || video.readyState < 1) return;                     // source not confirmed yet (it may still fail and fall
                                                                   // back to the next one): retried on loadedmetadata
     lumFor = src;
-    if (!m) { lumState = -1; return; }                            // a source without a table: read the video (as before)
+    LUM_VW = video.videoWidth; LUM_W = LUM_VW / LUM_BK; LUM_AW = Math.ceil(LUM_VW / LUM_AKX); LUM_ROW = Math.floor(LUM_W / LUM_AW);
+    if (!m || LUM_VW % LUM_BK || video.videoHeight !== 1440) { lumState = -1; return; }   // no table: read the video (as before)
     lumState = 1;
     var url = m[1] + '-lum-' + m[2].toLowerCase() + '.webp', fail = function () { lumFail(src); };
     if (window.fetch && window.createImageBitmap) {               // decoded off the main thread (an <img> decodes on it)
@@ -355,7 +497,7 @@
     })();
   }
   function lumReady() {
-    return lumState === 2 && lumFor === video.currentSrc && video.videoWidth === 2560 && video.videoHeight === 1440 &&
+    return lumState === 2 && lumFor === video.currentSrc && video.videoWidth === LUM_VW && video.videoHeight === 1440 &&
       Math.round(video.duration * FPS) === CLIP_FRAMES;
   }
   function lumAt(u, X, Y) {                                       // luminance at video pixel (X, Y) of unique frame u
@@ -627,7 +769,6 @@
   }
 
   window.addEventListener('scroll', function () {
-    lastScrollT = performance.now(); restGoal = null;
     toneOnScroll(); updateSand();
     boost(); schedule();
   }, { passive: true });
@@ -636,7 +777,11 @@
     new IntersectionObserver(function (entries) {
       inView = entries[0].isIntersecting;
       // when the hero leaves the screen, put the camera where the scroll is (no glide needed off-screen)
-      if (!inView && ready) { pos = goal = restGoal = Math.round(progress() * LX); vel = 0; target = U[pos]; pump(); }
+      if (!inView && ready) {
+        pos = Math.round(progress() * LX); vel = acc = 0; sm = null; gPrev = null;
+        plan = { t0: -1e9, T: 1, v0: 0, a0: 0, d: 0, p0: pos };   // already at rest here
+        target = U[pos]; pump();
+      }
       if (!inView) fabHold(false);                // video off screen: nothing is playing for the visitor
       schedule();
     }).observe(hero);
