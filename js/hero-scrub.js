@@ -4,20 +4,22 @@
    - it moves over the clip's real camera positions (the villa clip repeats every 5th frame; repeats are skipped)
    - inertial "dolly" camera while the visitor scrolls: a gliding target gives it weight; a critically damped follower,
      pushed by the target's speed (the push builds up smoothly), eases every start. Limits fade in - no hard switches.
-     Integrated in 4 ms sub-steps, so the path is the same at 30, 60 or 120 Hz.
-   - planned ending: the moment the scroll stops (or only crawls), the camera picks its resting frame - sharp, within
-     the sync window around the scroll position, never behind its direction of travel - and glides there on a quintic
-     curve that starts with its current speed and acceleration and ends with zero speed and zero deceleration. Glide
-     time = 2 x distance / speed, so it coasts and only slows down; it speeds up only when it must catch up (page jump).
-     Landing: the picture changes only by whole frames (the frame shown is the nearest to the camera), so the last
-     visible change happens half a position before the resting frame. The glide lands there - at a slow LAND_V, each
-     frame interval LAND_RATIO longer than the one before - and covers the final, invisible half position afterwards.
-     Without this the gentle end of the curve fell inside that invisible half position: the picture stopped while the
-     camera still moved and braked, after a last interval ~1.7x the previous one.
-     Scrolling again cancels the glide and hands back to the follower without a jump in speed or acceleration.
+     Integrated in 4 ms sub-steps, so the path is the same at 30, 60 or 120 Hz. The follower stays close to the scroll
+     (~0.1-0.2 s), so no backlog builds up that would have to be played after the visitor stops (it used to trail by up
+     to ~0.5 s and 50-120 positions, replayed for 1-1.7 s after the page had stopped).
+   - landing: once the scroll stops and the camera no longer speeds up, it picks its resting frame - sharp, within the
+     sync window around the scroll position, never behind its direction of travel - and slows down to it in one
+     continuous movement: a quintic from its current speed and braking to zero speed and zero braking, about as long as a
+     coast (T = 2 x distance / speed: then speed = v0 x (1 - smoothstep(t/T)) - the braking builds up and eases off
+     again). Only curves whose speed never rises are used (no slow-down - speed-up - slow-down, as the old landing zone
+     did). The frame and T are chosen for a short landing (LAND_T) whose last frame interval stays short (LAND_LAST).
+     The picture changes only by whole frames (the nearest to the camera), so the final half position before the resting
+     frame is invisible.
+     Scrolling again cancels the landing and hands back to the follower without a jump in speed or acceleration.
      Touch: from the moment the finger lifts, the landing aims at where the page's own momentum will stop (estimated
-     from the scroll speed, refined every frame) instead of following that momentum's slow tail frame by frame. At
-     30 Hz or less a landing frame is never held shorter than the one before it (no 1-/2-frame judder).
+     from the scroll speed, refined every frame) instead of following that momentum's slow tail frame by frame; it is
+     longer (LAND_T_FLING), like the momentum itself. At 30 Hz or less a landing frame is never held shorter than the
+     one before it (no 1-/2-frame judder).
    - a top speed, lower on touch devices (the portrait crop magnifies each step's motion ~2.2x)
    - first and last frames stay exact
    Watchdog: a seek that never completes or a start that never gets its first frame is retried (never more than one
@@ -70,21 +72,23 @@
   var CLIP_BRIGHT_PORTRAIT = '84928a7892c9b3cb76948f987590797e84928a7892c9b3cb76948f987590797e8692897992cab1cb77968f98738c797b8893857993ccafca7c959096718c79798894857993cfaeca80949197718d79778895837b93d0aacb868d9298708674648895837b93d0aacb868d9298708674648895837c92d2abca8a89929a707c725e8798837e92d1a9ca9185909c71746d60879c868192d1a9ca9382919b71706e63879f888693d1a9cb977e919d6f6b7267879f888693d1a9cb977e919d6f6b7267869f889492d0a6cb9b7e909e6c6b746986a28ba190cea7cc9f7c8fa06a70796e86a48ca590cfa7cca07d8fa067727b7086a78fab90cda9cda37c8fa065747e7386a78fab90cda9cda37c8fa065747e7386a88fac90cca7cea57a8f9f6576807486a891ae8fcca8cfa8788e9d6678817686a894b091c8a8d0aa788e9c687a827986a895af91c6a8d1ab748e9b697b847b86a895af91c6a8d1ab748e9b697b847b85a796ae91c5a8d0ae738f996a7c857c85a598ac91bfa8d1ae6e8f986a7d867e85a499ab8fb8a7d0ac6d8f986b7d877e85a39aaa90b4a7d0a76c91976c7d888085a39aaa90b4a7d0a76c91976c7d888085a39ca990b0aacea16c91956f7e878185a19da890a5abce9b6b9192737e8782859fa0a78ea0adcd976a9290747f8684859da4a68f97b2c99369928e77808782859da4a68f97b2c99369928e77808782859ca6a58d96b1c78d69938b79808880849ea5a48e96b0c18a6a92887a82897e839ea8a38f95adbf876991867b838a7e82a1a7a38e96adbe866d90847d858b7f82a1a7a38e96adbe866d90847d858b7f82a0a9a28e97aabb856c91837f858b80819db0a38d93acb9836c918381868d81819ab6a18d91b0b6836c928380868e828198c3a18c8fb9b3856b928282888f838198c3a18c8fb9b3856b928282888f838194cca18b8dbeab856b927e82889084818fd5a08b8bc4a7856b927c828891838290d59f8b8cc4a5866c917c818891848191d6a08c8dc2a28a6d8e7c818991848191d6a08c8dc2a28a6d8e7c818991848190d69f8d8cbea28a6d8e7a828a93858092d99e8c8cbf95896e8a7a828b93858193d99d8b8dc19987708979848b94867f94d9a18a8dbe9d8773847c848c95877f94d9a18a8dbe9d8773847c848c95877f93d6a38a8dab9e8775817e858c96877f93c4a98b8e96a188727c82868d97877e92b7b58b8d8ea289727986878e97867f939cc48b8b8da68973738e898e98887f939cc48b8b8da68973738d898e9888809396ca8b8b92a28a74718d898e9b8781949ad18a8a969c8876708a89909e89829698d7898b9397877971898991a08982978cdb868a8da5877a6d8e8a92a58a82978cdb868a8da5877a6d8e8a92a58a84967ddb85878daf86796a928a92a88c85946bdb848689b4857969928895a988859569db83858ab1877969918499a68686956adb82848bb288786a8e7c9b948086956adb82848bb288786a8e7c9b948087966cda818489aa89796b87799b9082899673d87f83879b8b7b6b8078a190828a9675d67d8086898b7d6e7c77a493848b947ace7a7f87838b7f6e757fa6988d8b947ace7a7f87838b7f6e757fa6988c8c937ccd777d86858b7e727187a899878c937ccf757b85878c7f7b6b889b80758c937cc5747a84838d7f7f6a879272718d927d887378827f8c7d8369888869658c927d887378827f8c7d8369888869658d937f7373787e788a7e82698983675b8d93827273777d7a887f8468898068588d94837d72777b7c89808667847c665a8d9386817276787d877f8b657b7161648d9386817276787d877f8b657b7161648e9289817276777a847e8a636f6d5d668d928c80727576777d808d67726c5c6d8d928d83717476767c81906a726b58738d928d86717375777a848e6f7465527d8d928d86717375777a848e6f7465527d8e928e88707375777a8a8c78716254868e94928a707374767c938d7a775a5c8a8e93938d7072747581998f7a705364858e929190707274758498907a6e5877948e929190707274758498907a6e5877948e92908d70727374819894796a5e70798f91908c6f7173738a999b7f5a6570748f90908c6f717272989b9e87566e7975908f8f8f70707272a59d9c8f5d747969908f8f8f6f707272a59d9c8f5d7479699190908e70707272a2a39d9763776a649190928d706f7172b2a399a5798362669190928e706e7172b39f9faa82835a609390908f776c7072a29ea2b3a17462639390908f776c7072a29ea2b3a174626393908f8d856b7072a0a0a5b5a7756366938f908c946a7071a69fa9b98b766a62948f8f8c9c696f71aaa1a8bf85716d5d958f8f8ca9686f71aea49ec67e757c63958f8f8ca9686f71aea39ec67e757c63958f8f8dac676f71b1a194c77e7b9f6a968f908cb0676e71b59e88c37f94a67f968f8e8db1676c70bca185b4829aa986968f8d8cad666b6fc0a17e7b9fa4b291968f8d8cad666b6fc0a17e7b9fa4b291958e8d8cab666a6fc1a47e6da2a7b29a918d8e8ca966676dc1aa8074b2aaada38e8d8d6fa367656cc2ae817cb6a6aea18b88716ea077646bc2b68b88cb9b938d8b88716ea077646bc2b68b88cb9b928d8871706d9e846469bfba928fce8a818e7171716e9b976266b2bea1a6cc9483307070706c959a6164b0bfb2b0809577337071706c969e5f63afc0c0bd779a7a597071706c969e5f63afc0c0bd779a7a5970706f6c8fab5f63afc0aeb574a57d716f706c6b8cc35a66b3c28da59bbccaa96f6f6a6b83c85668b0bb717cafbdd8c16f6e6a6b85cb5768a4bc6c7cbec4d3c96f6e6a6a85cb5768a4bc6c7cbec4d3c96f6b696a76cd5968a0bc6e7fbbb9b2bc6d6b686a79cd5a689bbd747fb1a69e856c69666976ce5a6899be7983b1a5907d6c69666876cf5c6a96bf828bb3a2827a6c68666976cf5c6a96bf828bb3a2827a6b68666672cf5d6b96c08c93b29c7f746968646570d05f6998c19590b09e7777666763646dd0626898c19887b0957476666563636ed2646897c2a079ac727372666563636ed2646897c2a079ab727372656461646fd2666698c3a26d6f7070756361616371d366659bc49f676f6f717c615e5e6272d36a5c9fc49e5c696e71865d5c5c5e72d38349a3c39f50676d78a05d5c5c5e72d38349a3c39f50676e78a05b5a5a5a72d48d44a6c1a04d666f90a258585a4e76d49839a8c0a243699796a05758595877d49c3fa8bea4486aa6a3ab5658595c7dd4b147a2bea9459daeb2b35658595c7dd4b147a2bea9459daeb2b35658585c87d4bd4a9dbfac46afb1b4a55557575d91d4c0529ac0b24cb2b6b48c5456575a9ed4c4589dbfb451b2b694855556565caed4c9659dc0b661b4ac8c6c5456565cb0d4c9669dc1b661b4ac8c6c53555559b6d4cb639dc1b66db1978e6a50545355bad4cf649ec0b77ca391716a4f535253bad4d165a1c2b8819777716a4f535353bcd4d166a3c2bb906f74716b4f535353bcd4d166a3c2bb906f74716b4f545352bdd4d165a1c2bc916c7b706b51555452ced3d167a3c1bc856e8e6f6851555550cfd3d16ea6c2bb816c91756753575650d0d2d274a9bfbb776c918c7753575750cfd2d274a9bfbb776c918c775357574dcfd2d273a9bdba706d9094975156574ccfd2d178a9bcba6c718e97a35256574ecfd2d17ea9bcba6e718d9fa753575751ced2d189a8bbb9737191a4ad53575751ced2d189a8bbb9737191a4ad54575753ced2d189a9bbb9737195adb054585a55ced2d18da9bab9727297b4b1555b5c56ced2d191a9bab8747199b7b3575d5e5aced2d1a7a8bab87b7b9eb9b9575d5e5aced2d1a7a8bab87b7b9eb9b8585f615cced2d1bea7b9b77d8fa8b9b75c626361ced2d1c6a5b9b68794aeb9b45d636563cfd2d1c6a6b9b78e97afb89a5f656866cfd2d1c6a6b8b6979ca4ab8d5f656866cfd2d1c6a6b8b6979ca4ab8d62686a68cfd1d1c6a7b8b59b9f979c87646a6c6acfd1d1c7a7b7b59da9949b85666c706ccfd1d0c7a6b6b59d939296816b707270cfd1d0c7a6b6b5a0878e8c826b707270cfd1d0c7a6b6b5a0878e8c826d737370cfd0cfc8a5b4b3a0898c8d8171757873cecfcfc8a4b3b39f8b8b898072777b77cecfcec9a5b3b2a08a8c8981727c7e79cecfcec9a4b2b29f898c8783727c7e79cecfcec9a4b2b29f898c8783767e807acecfcec9a3b1b19f898b87827a81847ececececaa3b0b09f8c8a87817c848680cfcecdcaa2b0af9f8c8986807e858b83cececdcaa3afaf9e8e8989837e858b83cececdcaa3afaf9e8e8989837e868b84cececdcaa3adae9d8d89898680898c85cececdcaa4acac9b8c888987828b8d86cecdcccaa5acad9b8d888988848c8e88cecdcbcaa5abac9c8c89898a848c8e88cecdcbcaa5abac9c8c89898a858d8f88cecdcbcaa5abab9c8d88898d888e908bcecccbcaa5abab9e8e87888c8a8e908bcecbcbcaa5a9aa9e8d8a888c8d8f928ecdcbcbcba6a9aaa18c8d878a8d8f928ecdcbcbcba6a9aaa18c8c878ab2aeadafcdcbcbcba5a9a9a08d8d878ab1aeadaecccbcacaa4a6a7a08f8a8887b0aeadadcccbcacaa5a6a7a1918a8a88b0adacaccccbcacaa5a6a6a38f8a8a87afadacaccccbcacaa5a6a6a38f8a8a87afacababcbcacacaa4a5a5a18e888987aeabaaaacbcac9c9a4a5a6a28e878986aeaba9aacbcac9c9a4a6a6a28e878986aeaba9a9cacac9c9a4a6a8a38d8b8886aeaba9a9cbcac9c9a4a6a8a38d8b8886aeaba9a9cbcac9c9a6a8aca58d8c8987adaba8a9cbcac9c9a7a9aca88d898786adaaa7a8cacac9c9a8abacad8d898888ada9a7a7cacac9c8a9acb4af8a88898aaca9a6a8cacac9c8a9acb4af8a88898aaca8a6a7cac9c9c8a9abb7b68a878b8caca7a6a7cac9c8c8a9acc2be8c8a8a8caca7a6a6cac9c8c8abb5c4c08c8b898caba6a6a6c9c9c8c7abbbc6c08989888caba6a6a6c9c9c7c7abbbc6c08989888caba6a6a6c9c8c7c7bcbfc6c48888868aaba6a5a6c9c8c7c7bcc2cccc87868588aaa6a5a6c9c8c6c7bec3d0d187858488aaa6a5a5c8c7c5c6bfc6d2d484838386aaa6a5a5c8c7c5c6bfc6d2d484838386a8a6a4a4c7c7c5c5c0cbd6d583828285a8a5a4a4c7c5c4c4c7ccd5d582828082a7a5a4a4c6c5c4c4c9ced4d482828181a7a4a3a3c5c4c3c3caced1d380818482a7a4a3a3c5c4c3c3caced1d380818482a7a4a3a3c5c3c3c3cacdcfd27f82b185a6a4a3a3c4c3c2c2c8cccecf82acd2d1a6a3a3a3c4c2c1c2c8cbcccf88c3d5d4a6a3a3a3c3c2c1c1c7cbccccb0ccd8d7a6a3a3a3c3c2c1c1c7cbccccb0ccd8d7a6a3a3a3c3c1c0c0c7cacbcbbed0d6d6a5a3a3a2c2c1c0c0c6c8cacac9d4d7d6a5a3a3a2c2c0bfbfc6c7c9c9ccd5d7d7a5a3a3a2c1c0bebfc6c7c8c9ced6d8d9a5a3a3a2c1c0bebec5c7c8c8ced6d8d9a5a3a3a2c1bfbdbec4c6c7c8ced6d7d8a5a4a3a3c0bebcbdc3c5c6c6cfd6d7d5a5a4a3a3bfbdbcbcc2c4c5c4d1d4d3d4a5a4a3a3bfbdbcbcc1c3c5c3d1d2d4d4a5a4a3a3bfbdbcbcc1c3c5c3d1d2d4d4a6a4a4a4bebcbbbcc0c1c3c2d1d1d4d4a6a4a4a4bebcbbbcbfc0c2c1d3d2d4d4a6a4a4a4bebcbbbcbebfc1c1d2d2d4d4a6a5a5a5bdbcbbbbbcbec0bfcfd2d4d3a6a5a5a5bdbcbbbbbcbec0bfcfd2d4d3a6a5a5a5bdbbbabbbabbbebeced1d3d3a7a5a5a5bdbbbabbb8b8bcbbcdd1d3d2a7a6a6a6bcbbbabbb6b7bab9cdd1d3d2a7a6a6a6bcbbbabbb5b5b8b7ccd0d2d2a7a6a6a6bcbbbabbb5b5b8b7ccd0d2d2a7a6a6a7bcbbbabbb3b3b6b5cacfd2d1a8a7a7a7bcbab9bab2b2b4b2cbd0d1cfa8a7a7a8bcbab9bab0b0b4b2cbcfd1ceaaa8a8a8bcbab9baaeb0b2b2c9cecfcdaaa8a8a8bcbab9baaeb0b2b2c9cecfcdaaa8a8a8bbbab9baadafb2b3c7cccdccaaa9aaaabbbab9b9afb3b2b7c7cbcecbabaaaaaabbb9b9b9b0b4b4bbc7cbcdcbabaaabaabbb9b8b9b2b4b8bec6caccc9abababaabbb9b8b9b2b4b8bec6caccc9acabababbbb9b8b9b4b6babfc6c9cbc9acabababbab9b8b9b8babcc0c6c9c9c7acabababbbb9b8b9babdc0c5c6c8c9c7adacacacbab9b8b9bfc1c6c9c5c7c8c5adacacacbab9b8b9bfc1c6c9c5c7c8c5adacacacbab8b7b9c1c6cac9c5c6c7c5adadadadbab9b7b9c6d0cfc8c5c6c6c5aeaeaeadbab8b7b9c9d6d1cbc4c7c5c5aeaeaeaebab8b7b9ccded8d1c4c5c4c4aeaeaeaebab8b7b9ccded8d1c4c5c4c4afaeafaebab8b7b8cee1d8d5c3c5c5c4afafafafbab8b6b8cfe6dcdac3c5c6c2b0afb0afbab8b6b7cee8dddbc1c5c5c1b0b0b0b0b9b7b6b7c7eadddec0c4c3c1b0b0b0b0b9b7b6b7c7eadddec0c4c3c1b0b0b0b0b9b6b6b5c4eadde0c0c1c1c0b2b2b2b2b8b4b4b3c4eadedfbfc1c1c0b2b3b3b2b6b4b3b2c7e8dbdabfc0c0bfb3b4b3b4b5b2b0afcde3dad7bfc0bfbfb3b4b3b4b5b2b0afcde3dad7bfc0bfbfb3b4b4b4b4b1afaed0e0dbd5bfbfbfc0b4b4b4b5b2aeabaad1dedcd3bfbfbfbfb4b4b4b5b1acaaa9d1dddbd3bfbfbfbfb4b4b4b5afaaaaa7cfdad9d6bfbfbfbfb4b4b4b5afaaaaa7cfdad9d6bfbfbfbf';
   function portraitClip() { return video.videoWidth === 816 && video.videoHeight === 1440; }
 
-  // Camera tuning (positions per second; real speed of the villa clip = 24 positions/s)
-  var V_MAX = 120;         // top speed (touch devices: lower, see below)
-  var TAU = 0.30;          // s, glide of the target: the camera's weight and the length of the coast after a stop
-  var OMEGA = 9;           // 1/s, how closely the camera follows the gliding target (critically damped: no overshoot)
-  var TAU_PUSH = 0.08;     // s, the target's speed reaches the camera as a push that builds up (no jolt per wheel notch)
-  var A_MAX = 300;         // positions/s^2, acceleration limit (reached gradually)
-  // planned ending (see the header): glide time window, preferences and the sync window
+  // Camera tuning (positions per second; real speed of the villa clip = 24 positions/s). Desktop (wheel, trackpad);
+  // touch devices have their own values (MOBILE, below).
+  var V_MAX = 160;         // top speed
+  var TAU = 0.15;          // s, glide of the target: the camera's weight - and how far it trails the scroll
+  var OMEGA = 13;          // 1/s, how closely the camera follows the gliding target (critically damped: no overshoot)
+  var TAU_PUSH = 0.06;     // s, the target's speed reaches the camera as a push that builds up (no jolt per wheel notch)
+  var A_MAX = 550;         // positions/s^2, acceleration limit (reached gradually)
+  var J_MAX = 9000;        // positions/s^3: how fast the acceleration itself may change - a wheel notch or a new touch
+                           // starts the camera with a short ramp, not a kick
+  // landing (see the header)
   var REST_R = 4;          // the resting frame lies within this many positions of the scroll position (sync window)
-  var T_MIN = 0.35, T_MAX = 2.4, T_PREF = 0.9;   // s, glide time limits and the preferred glide
-  var A0_CAP = 80;         // positions/s^2: acceleration carried into the glide (more is dropped after abrupt input)
+  var LAND_T = 0.3;        // s, preferred landing: from the hand-over to the last visible frame change
+  var LAND_T_HI = 0.6;     // s, longest landing; a longer way is first covered by the follower
+  var LAND_LAST = 0.1;     // s, the last frame interval (the one that brings the resting frame) should not be longer
+  var LAND_T_FLING = 0.9, LAND_T_FLING_HI = 1.6;   // s, the same after a touch fling (the momentum carries further)
   var SLOW_IN = 5;         // positions/s: scrolling slower than this (a momentum tail, a crawl) counts as stopped
   var STEP_HOLD = 60;      // ms, wheels without smooth scrolling jump per notch: a gap this short is not a stop yet
-  var LAND_V = 9;          // positions/s at the last visible frame change of a glide (~110 ms per frame)
-  var LAND_RATIO = 1.25;   // while landing, each frame interval is this much longer than the one before
-  var LAND_N = 3;          // positions before the last visible change that follow that ratio exactly (the landing zone)
 
   var U = [], REL = [], LX = 0;      // timeline: U[i] = source frame of camera position i
   var knownClip = false, clipBright = CLIP_BRIGHT;   // clipBright: CLIP_BRIGHT of the clip playing (set with the timeline)
@@ -132,8 +136,9 @@
   var MOBILE = !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
   var varHost = hero;
   // Touch devices: the portrait crop shows ~665 of the clip's 2560 px, so one camera step moves the picture ~2.2x more
-  // (relative to the screen) than on desktop. A lower top speed keeps the fastest on-screen motion equal to desktop's.
-  if (MOBILE) V_MAX = 56;
+  // (relative to the screen) than on desktop. A lower top speed keeps the fastest on-screen motion close to desktop's.
+  // The finger moves the page continuously (no wheel notches to smooth over), so the follower is tuned on its own.
+  if (MOBILE) { V_MAX = 75; TAU = 0.12; OMEGA = 13; TAU_PUSH = 0.06; A_MAX = 350; J_MAX = 9000; LAND_T = 0.35; }
   // All devices: the floating WhatsApp button (.wa-fab) stays hidden while the video is in progress (.is-playing
   // on the hero, see css/hero-video.css) and returns once the final frame has been painted.
   function fabHold(on) { hero.classList.toggle('is-playing', on); }
@@ -273,14 +278,19 @@
   var gPrev = null, gSpeed = 0, lastInT = -1e9, lastFastT = -1e9, stepIn = false, inGap = 17;   // scroll input tracking
   var K_SM = 1 - Math.exp(-0.004 / TAU), K_PUSH = 1 - Math.exp(-0.004 / TAU_PUSH);   // per 4 ms sub-step
 
-  // Touch momentum. When the finger lifts, the page scrolls on by itself and slows down for a second or two; following
-  // that tail made the stop a crawl (the last frames held 130-250 ms). From the lift on, the landing aims at where the
-  // momentum will stop: the scroll position + its speed now x TAU_FLING (native momentum on iOS loses speed by x0.998
-  // per ms, e by every 0.5 s), re-estimated every frame. The glide is planned as soon as it can coast there (canGlide);
-  // until then the camera follows the scroll as before. While the finger is on the screen nothing changes; a new touch
-  // drops the estimate at once (and scrolling again hands back to the follower as always).
-  var TAU_FLING = 0.5;                                                // s
-  var fling = 0, inHist = [];                                         // fling: 0 none, 1 finger just lifted, 2 momentum
+  // Touch momentum. When the finger lifts, the page scrolls on by itself and slows down; following that tail made the
+  // stop a crawl (the last frames held 130-250 ms). From ~70 ms after the lift (the first frames of momentum show how it
+  // fades), the landing aims at where the momentum will stop: the scroll position + its speed now x its decay time,
+  // measured from the scroll itself (speed / deceleration of a parabola through the last ~160 ms of input), at most
+  // TAU_FLING (iOS: speed x0.998 per ms, e by every 0.5 s; Chrome's fling fades much faster); re-estimated every frame.
+  // The resting frame is then chosen only up to that estimated end - beyond it only as far as a gentle stop needs when the
+  // camera has already passed it: a momentum that stops sooner than estimated still leaves the camera inside the sync
+  // window, without turning back.
+  // The landing is planned as soon as it can coast there (canGlide); until then the camera follows the scroll as before.
+  // While the finger is on the screen nothing changes; a new touch drops the estimate at once (and scrolling again hands
+  // back to the follower as always).
+  var TAU_FLING = 0.5;                                                // s, longest decay time assumed
+  var fling = 0, flingAt = 0, flingWant = 0, lastInDir = 0, inHist = [];   // fling: 0 none, 1 finger just lifted, 2 momentum
   window.addEventListener('touchstart', function () { fling = 0; }, { passive: true });
   window.addEventListener('touchend', function (e) { if (!e.touches || !e.touches.length) { fling = 1; schedule(); } }, { passive: true });
   window.addEventListener('touchcancel', function () { fling = 0; }, { passive: true });   // no estimate: as before
@@ -294,6 +304,18 @@
     var den = n * sxx - sx * sx;
     if (n < 2 || !(den > 1e-12)) return 0;
     return (n * sxy - sx * sy) / den * Math.exp(sx / n / TAU_FLING);  // slope = speed at the samples' mean time
+  }
+  function inputDecay(t, v) {  // decay time of the scroll's speed now (s): speed / deceleration of a parabola through ~160 ms
+    var n = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, y0 = 0, y1 = 0, y2 = 0, gl = inHist[inHist.length - 1];
+    for (var i = 0; i < inHist.length; i += 2) {
+      if (t - inHist[i] > 160) continue;
+      var x = (inHist[i] - t) / 1000, y = inHist[i + 1] - gl, x2 = x * x;
+      n++; s1 += x; s2 += x2; s3 += x2 * x; s4 += x2 * x2; y0 += y; y1 += y * x; y2 += y * x2;
+    }
+    var det = n * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) + s2 * (s1 * s3 - s2 * s2);
+    if (n < 4 || !(Math.abs(det) > 1e-24)) return TAU_FLING;
+    var a = 2 * (n * (s2 * y2 - s3 * y1) - s1 * (s1 * y2 - s2 * y1) + y0 * (s1 * s3 - s2 * s2)) / det;   // deceleration now
+    return a * v < 0 ? Math.max(0.05, Math.min(TAU_FLING, -v / a)) : TAU_FLING;
   }
   // Frame cadence while landing at 30 Hz or less (see tick): the frame on screen (camera position), when it changed and
   // how long the frame before it was held.
@@ -310,68 +332,60 @@
       v: (v0T + a0T * s + 3 * c3 * s2 + 4 * c4 * s3 + 5 * c5 * s4) / T,
       a: (a0T + 6 * c3 * s + 12 * c4 * s2 + 20 * c5 * s3) / (T * T), done: false };
   }
-  // The glide: to the resting frame p0 + d with zero speed and zero deceleration (no snap, no brake jolt). With a landing
-  // gate (pl.tb > 0) it has three parts, with continuous speed and acceleration throughout (scrolling again hands back to
-  // the follower without a jump):
-  //  1. a quintic from the current motion to the landing zone, pl.xz positions before the gate;
-  //  2. the landing zone: speed = pl.vg x LAND_RATIO^(distance to the gate), so every frame interval in it is exactly
-  //     LAND_RATIO longer than the one before (acceleration -ln(ratio) v^2); it ends at the gate, half a position before the
-  //     resting frame, where the picture shows the resting frame, at the landing speed pl.vg;
-  //  3. the last half position in pl.tb s, invisible (the resting frame is already on screen), to zero speed and zero
-  //     deceleration.
+  // The landing: a quintic from (p0, v0, a0) to the resting frame p0 + d with zero speed and zero braking in T s - no snap,
+  // no brake jolt; speed and acceleration stay continuous when scrolling again hands back to the follower. From rest
+  // (v0 = a0 = 0) it is a short ease-in-out. The resting frame is on screen from half a position before it, so the end of
+  // the curve is invisible.
   function glideAt(pl, el) {
-    var tb = pl.tb || 0, tz = pl.tz || 0;
-    if (el >= pl.T + tz + tb) return { p: pl.p0 + pl.d, v: 0, a: 0, done: true };
-    if (!tb) return quint(pl.p0, pl.v0, pl.a0, pl.d, 0, 0, pl.T, el);
-    var L = Math.log(LAND_RATIO), dir = pl.dir, pg = pl.p0 + pl.d - 0.5 * dir;   // gate
-    if (el < pl.T) { var vz = pl.vg * Math.exp(L * pl.xz);
-      return quint(pl.p0, pl.v0, pl.a0, pg - dir * pl.xz - pl.p0, dir * vz, -dir * L * vz * vz, pl.T, el); }
-    if (el < pl.T + tz) { var E = Math.exp(-L * pl.xz) + L * pl.vg * (el - pl.T), v = pl.vg / E;
-      return { p: pg + dir * Math.log(E) / L, v: dir * v, a: -dir * L * v * v, done: false }; }
-    return quint(pg, dir * pl.vg, -dir * L * pl.vg * pl.vg, 0.5 * dir, 0, 0, tb, el - pl.T - tz);
+    if (el >= pl.T) return { p: pl.p0 + pl.d, v: 0, a: 0, done: true };
+    return quint(pl.p0, pl.v0 || 0, pl.a0 || 0, pl.d, 0, 0, pl.T, el);
   }
-  // Can the camera reach a resting frame by coasting (or, from rest, by a short settle)? Long catch-ups (page jumps, a
-  // fast scroll back) are left to the follower, which accelerates and cruises smoothly; the glide only ever finishes.
-  function canGlide(g) {
+  // Can the camera land from here within tHi s (or, from rest, by a short settle)? Long catch-ups (page jumps, a fast
+  // scroll back) are left to the follower, which accelerates and cruises smoothly; the landing only ever finishes.
+  function canGlide(g, tHi) {
     var av = Math.abs(vel), near = Math.max(0, Math.abs(g - pos) - REST_R);
-    return av > 1.5 ? 2 * near / av <= T_MAX && (g - pos) * vel > -REST_R : Math.abs(g - pos) <= REST_R + 1.5;
+    return av > 1.5 ? 2 * near / av <= tHi && (g - pos) * vel > -REST_R : Math.abs(g - pos) <= REST_R + 1.5;
   }
-  // Choose the resting frame and glide time: sharp, inside the sync window, never behind the direction of travel; a pure
-  // coast (glide time = 2 x distance / speed) is preferred; speeding up and hard braking are penalised. Once per stop.
-  function makeGlide(t, g, a0) {
+  // Choose the landing: the resting frame (sharp, inside the sync window around g, never behind the direction of travel)
+  // and its time. Only curves whose speed never rises; preferred: a landing of about `want` s and a short last frame
+  // interval - and, as before, the sharpest frame. `ahead`: how far past g the frame may lie (REST_R; for an estimated
+  // momentum end 0, or as far as a gentle stop needs when the camera has already passed it). Once per stop.
+  function makeGlide(t, g, a0, want, ahead) {
     var av = Math.abs(vel), moving = av > 1.5, dir = moving ? (vel > 0 ? 1 : -1) : (lastDir || (g >= pos ? 1 : -1));
-    a0 = moving ? Math.max(-A0_CAP, Math.min(A0_CAP, a0 || 0)) : 0;
-    var v0 = moving ? vel : 0, best = null;
-    for (var r = Math.max(0, Math.ceil(g - REST_R)); r <= Math.min(LX, Math.floor(g + REST_R)); r++) {
-      var d = r - pos, ad = Math.abs(d), Ts;
-      if (d * dir < -0.5) continue;                                    // never turn back
-      // landing gate when the camera arrives fast (at least twice the landing speed; slower stops keep the plain quintic,
-      // whose last frames are already slow) and the resting frame is not on screen yet (more than half a position ahead)
-      var gate = av >= 2 * LAND_V && d * dir > 0.6, vg = gate ? Math.min(LAND_V, 0.85 * av) : 0, LR = Math.log(LAND_RATIO);
-      // landing zone: up to LAND_N positions before the gate, as long as the quintic keeps at least one position to
-      // slow down to the zone's entry speed (which must stay below the current speed)
-      var xz = gate ? Math.max(0, Math.min(LAND_N, ad - 1.5, Math.log(0.9 * av / vg) / LR)) : 0, vz = vg * Math.exp(LR * xz);
-      var tz = gate ? (1 - Math.exp(-LR * xz)) / (LR * vg) : 0, tmin = Math.max(0.05, T_MIN - tz);
-      if (!moving) Ts = [Math.min(0.6, 0.3 + 0.07 * ad)];              // from rest: a short ease-in-out
-      else { var Tc = 2 * (gate ? ad - 0.5 - xz : ad) / (av + vz); Ts = [Tc * 0.85, Tc, Tc * 1.2].map(function (x) { return Math.min(T_MAX, Math.max(tmin, x)); }); }
-      for (var k = 0; k < Ts.length; k++) {
-        var pl = { T: Ts[k], v0: v0, a0: a0, d: d, p0: pos, dir: dir, vg: vg, xz: xz, tz: tz, tb: gate ? 1 / vg : 0 }, vmax = 0, amax = 0, back = false, dip = false;
-        for (var i = 1; i <= 24; i++) {
-          var q = glideAt(pl, Ts[k] * i / 24);
-          vmax = Math.max(vmax, Math.abs(q.v)); amax = Math.max(amax, Math.abs(q.a)); if (q.v * dir < -0.3) back = true;
-          if (gate && i < 24 && q.v * dir < 0.85 * vz) dip = true;    // slower than the landing zone's entry speed before it
+    var ab = moving ? Math.max(0, -dir * (a0 || 0)) : 0, best = null;   // braking already under way (positions/s^2)
+    for (var r = Math.max(0, Math.ceil(g - REST_R)); r <= Math.min(LX, Math.floor(g + ahead)); r++) {
+      var d = r - pos, D = d * dir, sharp = (r <= 0 || r >= LX) ? 1.2 : REL[r], score;
+      if (D < -0.5) continue;                                          // never turn back
+      if (!moving) {                                                   // from rest: a short ease-in-out (as before)
+        score = sharp - 0.03 * Math.abs(r - g) - 0.12 * Math.abs(r - Math.round(pos));
+        if (!best || score > best.score) best = { score: score, pl: { T: Math.min(0.6, 0.3 + 0.07 * Math.abs(d)), d: d, p0: pos } };
+        continue;
+      }
+      if (D < 0.6) continue;                                           // moving: the resting frame must still lie ahead
+      var Tc = 2 * D / av;                                             // a pure coast
+      for (var j = 0; j < 3; j++) {
+        var pl = { T: Tc * [0.9, 1, 1.15][j], v0: dir * av, a0: -dir * ab, d: d, p0: pos }, vp = av, rise = false, tv = 0, t15 = 0;
+        for (var i = 1; i <= 48; i++) {                                // speed never rises; when are 1.5 and 0.5 left
+          var q = glideAt(pl, pl.T * i / 48), sp = q.v * dir, left = (pl.p0 + d - q.p) * dir;
+          if (sp > vp + 0.5 || sp < -0.3) rise = true;
+          vp = Math.min(vp, sp);
+          if (!t15 && left <= 1.5) t15 = pl.T * i / 48;
+          if (!tv && left <= 0.5) tv = pl.T * i / 48;
         }
-        var sharp = (r <= 0 || r >= LX) ? 1.2 : REL[r];
-        var score = sharp - (back ? 5 : 0) - 0.03 * Math.abs(r - g) - 6 * Math.max(0, vmax / V_MAX - 1.02)
-          - (moving ? 1.5 * Math.max(0, vmax / av - 1.03) : 0)          // no speeding up while coasting
-          - 0.04 * Math.abs(Ts[k] - T_PREF) - 0.3 * Math.max(0, amax - 120) / 120;   // preferred glide, braking comfort
-        if (!moving) score -= 0.12 * Math.abs(r - Math.round(pos));     // at rest: settle on a near frame
-        if (dip) score -= 1;                                             // would slow down and speed up again
+        var last = tv - t15;                                           // the last frame interval (brings the resting frame)
+        score = sharp - 0.06 * Math.abs(r - g) - (rise ? 3 : 0)
+          - 0.5 * Math.max(0, Math.abs(tv - want) - 0.05) / 0.1        // landing time
+          - 1.5 * Math.max(0, last - LAND_LAST) / 0.03;                // a long last frame interval reads as a crawl
         if (!best || score > best.score) best = { score: score, pl: pl };
       }
     }
-    if (!best) { var rr = Math.max(0, Math.min(LX, Math.round(g))); best = { pl: { T: 0.5, v0: 0, a0: 0, d: rr - pos, p0: pos } }; }
-    best.pl.t0 = t;
+    if (!best) {
+      if (moving) {    // nothing ahead inside the window (the camera has passed it): stop on the next frame ahead, no turn back
+        var rf = Math.max(0, Math.min(LX, Math.round(pos + dir * Math.max(0.6, Math.min(3, 0.12 * av))))), Df = Math.max(0.05, (rf - pos) * dir);
+        best = { pl: { T: 2 * Df / av, d: dir * Df, v0: dir * av, a0: 0, p0: pos, forced: true } };
+      } else { var rr = Math.max(0, Math.min(LX, Math.round(g))); best = { pl: { T: 0.5, d: rr - pos, p0: pos } }; }
+    }
+    best.pl.t0 = t; best.pl.g0 = g;
     return best.pl;
   }
   // the follower: a critically damped camera pulled by a gliding target, with soft limits (used while scrolling and
@@ -382,9 +396,10 @@
       var st = Math.min(0.004, dt - h), full = st > 0.0039, prev = sm;
       sm += (g - sm) * (full ? K_SM : 1 - Math.exp(-st / TAU));                         // gliding target
       push += ((sm - prev) / st - push) * (full ? K_PUSH : 1 - Math.exp(-st / TAU_PUSH));   // its speed, as a push
-      acc = OMEGA * OMEGA * (sm - pos) + 2 * OMEGA * (push - vel);                       // critically damped follower
-      acc = A_MAX * Math.tanh(acc / A_MAX);                                               // the limit is reached gradually
-      if (acc * vel > 0) acc *= Math.max(0, 1 - Math.pow(Math.abs(vel) / V_MAX, 4));      // approach top speed softly
+      var at = OMEGA * OMEGA * (sm - pos) + 2 * OMEGA * (push - vel);                    // critically damped follower
+      at = A_MAX * Math.tanh(at / A_MAX);                                                 // the limit is reached gradually
+      if (at * vel > 0) at *= Math.max(0, 1 - Math.pow(Math.abs(vel) / V_MAX, 4));        // approach top speed softly
+      acc += Math.max(-J_MAX * st, Math.min(J_MAX * st, at - acc));                       // ...and without a jolt (J_MAX)
       vel = Math.max(-V_MAX, Math.min(V_MAX, vel + acc * st));
       pos += vel * st;
     }
@@ -408,16 +423,25 @@
     }
     gPrev = g;
     inHist.push(t, g);
-    while (inHist.length > 2 && t - inHist[0] > 150) inHist.splice(0, 2);
+    while (inHist.length > 2 && t - inHist[0] > 170) inHist.splice(0, 2);
+    if (inHist.length > 2 && Math.abs(g - inHist[inHist.length - 3]) > 1e-6) lastInDir = g > inHist[inHist.length - 3] ? 1 : -1;
     if (gSpeed >= SLOW_IN) lastFastT = t;
     // touch momentum (see above): the landing aims at its estimated end
     var aim = g;
     if (fling) {
       var vf = inputVel(t);
-      if (fling === 1) fling = Math.abs(vf) >= SLOW_IN ? 2 : 0;      // lifted while moving: momentum follows
-      else if (t - lastInT > Math.max(120, 3 * fgap)) fling = 0;     // the momentum has ended: the scroll position itself
-      if (fling === 2) aim = Math.max(0, Math.min(LX, g + vf * TAU_FLING));
+      if (t - lastInT > Math.max(120, 3 * fgap)) fling = 0;          // no (more) momentum: the scroll position itself
+      else if (fling === 1) {                                        // lifted: watch the first ~70 ms of momentum
+        if (!flingAt) flingAt = t;
+        if (t - flingAt >= 70) fling = Math.abs(vf) >= SLOW_IN ? 2 : 0;
+      }
+      if (fling === 2) {
+        var tf = inputDecay(t, vf);
+        aim = Math.max(0, Math.min(LX, g + vf * tf));
+        flingWant = Math.max(LAND_T, Math.min(LAND_T_FLING, 1.8 * tf));   // a short fling lands sooner
+      }
     }
+    if (fling !== 1) flingAt = 0;
     // the visitor is still scrolling: input within its own rhythm (per frame, or every few frames on some mice and
     // trackpads; a notch gap without smooth scrolling), not just a crawl
     var scrolling = fling !== 2 && t - lastInT <= (stepIn ? STEP_HOLD : Math.max(1.5 * fgap, Math.min(110, 2.2 * inGap))) && t - lastFastT < 120;
@@ -430,11 +454,16 @@
     } else {
       // stopped: glide to the resting frame (re-plan if the scroll drifted out of the sync window); a long catch-up
       // first continues with the follower until a coast can finish it
-      if (plan && Math.abs(plan.p0 + plan.d - aim) > REST_R + 0.5) {
+      // (a forced stop just past the window is kept unless the scroll itself moves)
+      if (plan && Math.abs(plan.p0 + plan.d - aim) > REST_R + 0.5 && (!plan.forced || Math.abs(aim - plan.g0) > 0.5)) {
         var qq = glideAt(plan, (t - plan.t0) / 1000); sm = pos + qq.a / (OMEGA * OMEGA); push = vel; plan = null;
       }
-      // (touch momentum: only once the camera no longer speeds up, so the landing starts as a slow-down)
-      if (!plan && canGlide(aim) && (fling !== 2 || acc * vel <= 0)) plan = makeGlide(t, aim, acc);
+      // the landing starts only once the camera no longer speeds up (or cruises at its top speed): one continuous slow-down
+      // never turn back for a misjudged momentum: if the camera has already passed the window in the direction the
+      // visitor scrolled, it stops on the next frame ahead (makeGlide) - a visitor who scrolls back is followed as always
+      var fl = fling === 2, passed = Math.abs(vel) > 1.5 && (aim - pos) * vel < -REST_R && lastInDir * vel > 0;
+      if (!plan && (passed || ((acc * vel <= 0 || Math.abs(vel) > 0.97 * V_MAX) && canGlide(aim, fl ? LAND_T_FLING_HI : LAND_T_HI))))
+        plan = makeGlide(t, aim, acc, fl ? flingWant : LAND_T, fl ? Math.max(0, Math.min(REST_R, (pos - aim) * (vel > 0 ? 1 : -1) + 0.1 * Math.abs(vel))) : REST_R);
       if (plan) { var p = glideAt(plan, (t - plan.t0) / 1000); pos = p.p; vel = p.v; acc = p.a; sm = null; }
       else follow(dt, g);
     }
