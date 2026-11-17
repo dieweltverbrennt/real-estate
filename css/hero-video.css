@@ -13,6 +13,17 @@
 /* Original sand fade and transition into the next section - unchanged gradient, now rising only at the end */
 .hero2.is-scrub .hero2-ov { opacity: var(--hero-sand); pointer-events: none; }
 
+/* Fallback picture under the video: the clip's first frame as the background of the video's own box. The video covers
+   it completely as soon as it shows a frame. Until then - a slow first load, a stalled download or seek, a decoder the
+   browser suspended (js/hero-scrub.js retries those) - the hero shows this picture instead of an empty stage (some
+   phones then paint the video as nothing: white text on limestone, a "white screen"). Same crop as the video
+   (object-fit: cover, centred): the landscape poster, and where the homepages' <source media> picks the portrait clip,
+   the portrait poster (the same frame). Never on screen while the video shows a frame. */
+.hero2.is-scrub .hero2-bg { background: url(../img/video/villa-poster.webp) 50% 50% / cover no-repeat; }
+@media not all and (min-aspect-ratio: 17/30) {
+  .hero2.is-scrub .hero2-bg { background-image: url(../img/video/villa-poster-mobile.webp); }
+}
+
 /* Adaptive gradient behind the white type: two feathered ellipses in one layer, drawn once - the heading's (50% x 32% at
    27% 70%, held at .75 of full strength) and a thin one along the subtitle line (34% x 8.5% at 26% 79.5%), placed where
    the text actually sits. The strength of the whole layer is its opacity, set by js/hero-scrub.js from the brightness

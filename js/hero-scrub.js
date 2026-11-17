@@ -15,8 +15,13 @@
      Without this the gentle end of the curve fell inside that invisible half position: the picture stopped while the
      camera still moved and braked, after a last interval ~1.7x the previous one.
      Scrolling again cancels the glide and hands back to the follower without a jump in speed or acceleration.
+     Touch: from the moment the finger lifts, the landing aims at where the page's own momentum will stop (estimated
+     from the scroll speed, refined every frame) instead of following that momentum's slow tail frame by frame. At
+     30 Hz or less a landing frame is never held shorter than the one before it (no 1-/2-frame judder).
    - a top speed, lower on touch devices (the portrait crop magnifies each step's motion ~2.2x)
    - first and last frames stay exact
+   Watchdog: a seek that never completes or a start that never gets its first frame is retried (never more than one
+   seek at a time); a poster under the video (css/hero-video.css) covers any moment without a frame.
    The video never plays on its own: only currentTime is set, one seek at a time. Only original frames are
    shown - nothing is generated, blended or sharpened.
    Hero look (approved "Variant 5", styles in css/hero-video.css): the original sand fade rises only over the last
@@ -196,9 +201,10 @@
     if (!ready || target === shown || busy || video.seeking) return;
     shown = target; busy = true;
     if (target !== U[LX]) fabHold(true);
-    video.currentTime = (target + 0.3) / FPS;    // aim slightly past the frame start (never the previous frame)
+    seekTo((target + 0.3) / FPS);                // aim slightly past the frame start (never the previous frame)
   }
   video.addEventListener('seeked', function () {
+    if (!video.seeking) seekAt = 0;              // (watchdog) no seek outstanding any more
     painted = Math.max(0, Math.round(video.currentTime * FPS - 0.3));   // one seek at a time: this is the frame now shown
     if (!ready) { start(); return; }
     requestAnimationFrame(function () {
@@ -215,11 +221,48 @@
   // Back from the background (app switch, tab switch, bfcache): mobile browsers can suspend the paused video while the
   // page is hidden and drop a seek that was in flight, so its 'seeked' never comes and the one-seek-at-a-time gate stays
   // shut. On return, re-issue the current frame: a new seek replaces any pending one and reopens the gate.
+  // Before the start (ready) the start seek is asked for again, or - with no metadata yet - the watchdog takes over.
   function revive() {
-    if (document.visibilityState !== 'visible' || !ready) return;
+    if (document.visibilityState !== 'visible') return;
+    if (!ready) { if (video.readyState >= 1) seekTo(0.3 / FPS); else watchSoon(); return; }
     shown = target; busy = true;
-    video.currentTime = (target + 0.3) / FPS;
+    seekTo((target + 0.3) / FPS);
   }
+
+  // Watchdog. A seek whose 'seeked' never came (a stalled download, a decoder the browser suspended, a dropped seek) or a
+  // start that never got its first frame used to stop the hero for good - and some phones then paint nothing at all
+  // (white hero; the poster under the video, css/hero-video.css, now covers that). Every seek goes through seekTo().
+  // One timer checks while a seek is outstanding or the video is not running yet:
+  //  - after the start: the frame wanted now is asked for again; the new seek replaces the stuck one (and pump() also
+  //    waits while video.seeking), so there is never more than one seek at a time;
+  //  - before the start: when no data has arrived for 2.5 s, the source is loaded again (video.load(): the source
+  //    selection runs again); when data arrives but the start seek is stuck, that seek is asked for again; a load that
+  //    is merely slow is left alone. start() runs only once (ready), however many times this happens.
+  // Retries back off (1.5, 3, 6, then every 8 s) and do not give up: the video takes over as soon as it can.
+  var seekAt = 0, netAt = performance.now(), wdTimer = 0, wdTries = 0, srcFails = 0, wdOff = false;
+  function seekTo(time) { seekAt = performance.now(); video.currentTime = time; watchSoon(); }
+  function wdWait() { return Math.min(8000, 1500 * Math.pow(2, wdTries)); }
+  function watchSoon() { if (!wdTimer && !wdOff) wdTimer = setTimeout(watch, wdWait()); }
+  function watch() {
+    wdTimer = 0;
+    if (wdOff || (ready && !seekAt && !video.seeking && video.readyState >= 2)) { wdTries = 0; return; }   // running
+    var now = performance.now();
+    if (document.visibilityState === 'visible' && !(seekAt && now - seekAt < wdWait()) && recover(now)) wdTries++;
+    watchSoon();
+  }
+  function recover(now) {                       // true when it did something
+    if (!ready) {
+      if (now - netAt > 2500) { seekAt = 0; video.load(); return true; }           // nothing arriving: load again
+      if (video.readyState >= 1 && seekAt) { seekTo(0.3 / FPS); return true; }    // data arrives, start seek stuck
+      return false;                                                                // still loading: wait
+    }
+    shown = target; busy = true;
+    seekTo((target + 0.3) / FPS);
+    return true;
+  }
+  ['loadedmetadata', 'loadeddata', 'progress', 'canplay'].forEach(function (e) {
+    video.addEventListener(e, function () { netAt = performance.now(); });
+  });
   document.addEventListener('visibilitychange', revive);
   window.addEventListener('pageshow', function (e) { if (e.persisted) revive(); });
 
@@ -229,6 +272,32 @@
   var plan = null;                                                    // planned ending (glide to the resting frame)
   var gPrev = null, gSpeed = 0, lastInT = -1e9, lastFastT = -1e9, stepIn = false, inGap = 17;   // scroll input tracking
   var K_SM = 1 - Math.exp(-0.004 / TAU), K_PUSH = 1 - Math.exp(-0.004 / TAU_PUSH);   // per 4 ms sub-step
+
+  // Touch momentum. When the finger lifts, the page scrolls on by itself and slows down for a second or two; following
+  // that tail made the stop a crawl (the last frames held 130-250 ms). From the lift on, the landing aims at where the
+  // momentum will stop: the scroll position + its speed now x TAU_FLING (native momentum on iOS loses speed by x0.998
+  // per ms, e by every 0.5 s), re-estimated every frame. The glide is planned as soon as it can coast there (canGlide);
+  // until then the camera follows the scroll as before. While the finger is on the screen nothing changes; a new touch
+  // drops the estimate at once (and scrolling again hands back to the follower as always).
+  var TAU_FLING = 0.5;                                                // s
+  var fling = 0, inHist = [];                                         // fling: 0 none, 1 finger just lifted, 2 momentum
+  window.addEventListener('touchstart', function () { fling = 0; }, { passive: true });
+  window.addEventListener('touchend', function (e) { if (!e.touches || !e.touches.length) { fling = 1; schedule(); } }, { passive: true });
+  window.addEventListener('touchcancel', function () { fling = 0; }, { passive: true });   // no estimate: as before
+  function inputVel(t) {      // scroll speed now (positions/s, signed): slope of the last ~100 ms of input, carried to now
+    var n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (var i = 0; i < inHist.length; i += 2) {
+      if (t - inHist[i] > 100) continue;
+      var x = (inHist[i] - t) / 1000, y = inHist[i + 1];
+      n++; sx += x; sy += y; sxx += x * x; sxy += x * y;
+    }
+    var den = n * sxx - sx * sx;
+    if (n < 2 || !(den > 1e-12)) return 0;
+    return (n * sxy - sx * sy) / den * Math.exp(sx / n / TAU_FLING);  // slope = speed at the samples' mean time
+  }
+  // Frame cadence while landing at 30 Hz or less (see tick): the frame on screen (camera position), when it changed and
+  // how long the frame before it was held.
+  var cadI = -1, cadT = 0, cadH = 0;
 
   // Quintic from (p0, v0, a0) to (p0 + D, v1, a1) in T s: continues the current motion without a jump in speed or
   // acceleration and ends exactly with the given speed and acceleration.
@@ -338,10 +407,20 @@
       else if (jump > 1e-6) gSpeed = Math.max(gSpeed, SLOW_IN);   // first frame after a pause: the input counts as scrolling
     }
     gPrev = g;
+    inHist.push(t, g);
+    while (inHist.length > 2 && t - inHist[0] > 150) inHist.splice(0, 2);
     if (gSpeed >= SLOW_IN) lastFastT = t;
+    // touch momentum (see above): the landing aims at its estimated end
+    var aim = g;
+    if (fling) {
+      var vf = inputVel(t);
+      if (fling === 1) fling = Math.abs(vf) >= SLOW_IN ? 2 : 0;      // lifted while moving: momentum follows
+      else if (t - lastInT > Math.max(120, 3 * fgap)) fling = 0;     // the momentum has ended: the scroll position itself
+      if (fling === 2) aim = Math.max(0, Math.min(LX, g + vf * TAU_FLING));
+    }
     // the visitor is still scrolling: input within its own rhythm (per frame, or every few frames on some mice and
     // trackpads; a notch gap without smooth scrolling), not just a crawl
-    var scrolling = t - lastInT <= (stepIn ? STEP_HOLD : Math.max(1.5 * fgap, Math.min(110, 2.2 * inGap))) && t - lastFastT < 120;
+    var scrolling = fling !== 2 && t - lastInT <= (stepIn ? STEP_HOLD : Math.max(1.5 * fgap, Math.min(110, 2.2 * inGap))) && t - lastFastT < 120;
     if (scrolling) {
       if (plan) {                                // hand back to the follower with the same speed and acceleration
         var q = glideAt(plan, (t - plan.t0) / 1000);
@@ -351,19 +430,27 @@
     } else {
       // stopped: glide to the resting frame (re-plan if the scroll drifted out of the sync window); a long catch-up
       // first continues with the follower until a coast can finish it
-      if (plan && Math.abs(plan.p0 + plan.d - g) > REST_R + 0.5) {
+      if (plan && Math.abs(plan.p0 + plan.d - aim) > REST_R + 0.5) {
         var qq = glideAt(plan, (t - plan.t0) / 1000); sm = pos + qq.a / (OMEGA * OMEGA); push = vel; plan = null;
       }
-      if (!plan && canGlide(g)) plan = makeGlide(t, g, acc);
+      // (touch momentum: only once the camera no longer speeds up, so the landing starts as a slow-down)
+      if (!plan && canGlide(aim) && (fling !== 2 || acc * vel <= 0)) plan = makeGlide(t, aim, acc);
       if (plan) { var p = glideAt(plan, (t - plan.t0) / 1000); pos = p.p; vel = p.v; acc = p.a; sm = null; }
       else follow(dt, g);
     }
     if (Math.abs(vel) > 1.5) lastDir = vel > 0 ? 1 : -1;
     if (pos <= 0 || pos >= LX) { pos = Math.max(0, Math.min(LX, pos)); if ((pos === 0 && vel < 0) || (pos === LX && vel > 0)) vel = 0; }
-    target = U[Math.max(0, Math.min(LX, Math.round(pos)))];
+    var ri = Math.max(0, Math.min(LX, Math.round(pos))), ci = ri, land = !!plan && !scrolling;
+    // 30 Hz or less, while landing: the next frame comes no sooner than the previous one was held. Otherwise speeds of
+    // 15-30 positions/s alternate 1- and 2-frame holds (33/67/33/67 ms) - a judder instead of a gradual slow-down. Only a
+    // one-position step is held, and only when the next refresh will not need two: the picture never skips a frame for it.
+    if (land && fgap > 25 && cadI >= 0 && Math.abs(ri - cadI) === 1 && t - cadT < cadH - fgap / 2 &&
+      Math.abs(Math.round(pos + vel * fgap / 1000) - cadI) <= 1) ci = cadI;
+    else if (ri !== cadI) { cadH = land && cadI >= 0 && t - cadT < 250 ? t - cadT : 0; cadT = t; cadI = ri; }   // (a longer gap is no cadence)
+    target = U[ci];
     pump();
-    // keep animating while the visitor scrolls, the glide runs, or a frame is still pending
-    if (scrolling || !plan || t - plan.t0 < (plan.T + (plan.tz || 0) + (plan.tb || 0)) * 1000 || target !== shown) schedule();
+    // keep animating while the visitor scrolls, the glide runs, or a frame is still pending (or held)
+    if (scrolling || !plan || t - plan.t0 < (plan.T + (plan.tz || 0) + (plan.tb || 0)) * 1000 || target !== shown || ci !== ri) schedule();
     else lastT = 0;
   }
 
@@ -742,9 +829,10 @@
   video.addEventListener('loadeddata', start);
   video.addEventListener('loadedmetadata', function () {
     // Some mobile browsers stop at metadata; a tiny seek makes them decode frame 0.
-    if (video.readyState < 2) video.currentTime = 0.3 / FPS;
+    if (video.readyState < 2) seekTo(0.3 / FPS);
   });
   if (video.readyState >= 2) start();
+  watchSoon();                                   // (watchdog) until the video is running
   updateSand();
 
   // Buffer the rest of the clip only after the page has loaded (or once the visitor scrolls),
@@ -754,15 +842,18 @@
     if (boosted) return;
     boosted = true;
     video.preload = 'auto';
-    if (video.readyState >= 1 && video.readyState < 2) video.currentTime = 0.3 / FPS;
+    if (video.readyState >= 1 && video.readyState < 2 && !video.seeking) seekTo(0.3 / FPS);
   }
   if (document.readyState === 'complete') boost();
   else window.addEventListener('load', boost, { once: true });
 
-  // If no source can be decoded, fall back to the static poster layout.
+  // If no source can be loaded, the watchdog loads the selection again (a dropped connection is not the end); only when
+  // that has failed three more times, fall back to the static poster layout.
   var sources = video.querySelectorAll('source');
   if (sources.length) {
     sources[sources.length - 1].addEventListener('error', function () {
+      if (++srcFails <= 3) { netAt = 0; watchSoon(); return; }
+      wdOff = true; clearTimeout(wdTimer);
       ready = false;
       hero.classList.remove('is-scrub', 'is-ready');
     });
@@ -778,7 +869,7 @@
       inView = entries[0].isIntersecting;
       // when the hero leaves the screen, put the camera where the scroll is (no glide needed off-screen)
       if (!inView && ready) {
-        pos = Math.round(progress() * LX); vel = acc = 0; sm = null; gPrev = null;
+        pos = Math.round(progress() * LX); vel = acc = 0; sm = null; gPrev = null; fling = 0;
         plan = { t0: -1e9, T: 1, v0: 0, a0: 0, d: 0, p0: pos };   // already at rest here
         target = U[pos]; pump();
       }
