@@ -1,0 +1,40 @@
+/* Scroll reveal - the site's standard effect (variant A), driven by js/reveal.js, which tags the content blocks of every
+   page with data-rv and sets html.rv-a. Quick, almost imperceptible, smooth: an element starts as it comes ~3% into
+   the viewport and travels only 6-8px (6px on phones) in 0.9s on a soft-start, smoothly decelerating curve while its
+   opacity rises over 0.75s; picture frames only fade (0.9s) while the photograph inside settles from 1.015; the
+   contact form appears as one unit with a 0.35s fade and no movement. End states are opacity 1 and transform/scale
+   "none", so nothing is left that could affect layout, popups, sticky elements or hover effects.
+   Nothing here applies without the script (html.rv-a) or with reduced motion. */
+
+html.rv-a {
+  --rv-a-move: cubic-bezier(.25, .55, .25, 1);    /* soft start, smooth deceleration */
+  --rv-a-fade: cubic-bezier(.3, .4, .4, 1);       /* prompt, without a pop */
+}
+html.rv-a .rv-now,
+html.rv-a .rv-now * { transition: none !important; }
+
+html.rv-a [data-rv]:not([data-rv="rule"]) {
+  opacity: 0;
+  transform: translate3d(0, var(--rv-y, 8px), 0);
+  transition: opacity .75s var(--rv-a-fade) var(--rv-d, 0ms), transform .9s var(--rv-a-move) var(--rv-d, 0ms);
+}
+/* prepared for compositing while waiting, so the first frame of the movement never stutters */
+html.rv-a [data-rv]:not([data-rv="rule"]):not(.rv-in) { will-change: opacity, transform; }
+html.rv-a [data-rv="h"] { --rv-y: 6px; }
+html.rv-a [data-rv="img"] { --rv-y: 0px; }
+html.rv-a [data-rv="img"]:not([data-rv="rule"]) { transition-duration: .9s, 0s; }   /* frames: fade only, no travel */
+html.rv-a [data-rv="img"] img { scale: 1.015; transition: scale 1.2s var(--rv-a-move) var(--rv-d, 0ms); }
+/* the contact form: one unit, started early by the script, no movement, a very short fade - almost immediately there */
+html.rv-a [data-rv="form"]:not([data-rv="rule"]) { transform: none; transition: opacity .35s cubic-bezier(.25, .6, .3, 1) 0ms; }
+html.rv-a [data-rv].rv-in { opacity: 1; transform: none; }
+html.rv-a [data-rv].rv-in img { scale: 1; }
+
+@media (max-width: 600px) {
+  html.rv-a [data-rv]:not([data-rv="img"]) { --rv-y: 6px; }
+}
+
+/* reduced motion: nothing moves - only a plain, short fade */
+@media (prefers-reduced-motion: reduce) {
+  html.rv-a [data-rv] { transform: none !important; transition: opacity .6s ease var(--rv-d, 0ms) !important; }
+  html.rv-a [data-rv] img { scale: none !important; }
+}
