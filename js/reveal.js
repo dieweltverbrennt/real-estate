@@ -45,6 +45,9 @@
     // journal: index and articles
     ['.bl-in > *', 't'], ['.bl-cards > *', 'card'], ['.bl-bread', 't'], ['.bl-art-head > *', 't'], ['.bl-d-fig', 'img'],
     ['.bl-body > *', 't'], ['.bl-rel', 't'], ['.bl-author', 't'], ['.bl-cta-in', 't'],
+    // journal index, editorial layout (css/journal.css): the rail moves as one row, the rest block by block
+    ['.jr-feat', 't'], ['.jr-head', 't'], ['.jr-latest .jr-rail', 't'], ['.jr-mh', 't'], ['.jr-mlist > li', 'item'],
+    ['.jr-ex-grid > *', 'card'],
     // investment case studies: index and case pages
     ['.cs-in > *', 't'], ['.cs-grid-sec .cs-card', 'card'], ['.cs-bread', 't'], ['.cs-d-fig', 'img'], ['.cs-d-head', 't'],
     ['.cs-stats > *', 'item'], ['.cs-sec > *', 't'], ['.cs-exp', 't'], ['.cs-rel-h', 'h'], ['.cs-rel .cs-card', 'card'],

@@ -1,0 +1,2 @@
+# Missing pages under /ko/ answer with HTTP 404 and the KO "page not found" page.
+ErrorDocument 404 /ko/404.html

@@ -1,0 +1,2 @@
+# Missing pages under /ja/ answer with HTTP 404 and the JA "page not found" page.
+ErrorDocument 404 /ja/404.html

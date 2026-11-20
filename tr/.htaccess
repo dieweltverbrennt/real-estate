@@ -1,0 +1,2 @@
+# Missing pages under /tr/ answer with HTTP 404 and the TR "page not found" page.
+ErrorDocument 404 /tr/404.html

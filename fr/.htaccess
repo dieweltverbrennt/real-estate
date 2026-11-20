@@ -1,0 +1,2 @@
+# Missing pages under /fr/ answer with HTTP 404 and the FR "page not found" page.
+ErrorDocument 404 /fr/404.html

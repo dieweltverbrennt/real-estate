@@ -1,0 +1,2 @@
+# Missing pages under /es/ answer with HTTP 404 and the ES "page not found" page.
+ErrorDocument 404 /es/404.html

@@ -1,0 +1,2 @@
+# Missing pages under /it/ answer with HTTP 404 and the IT "page not found" page.
+ErrorDocument 404 /it/404.html

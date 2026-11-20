@@ -1,0 +1,2 @@
+# Missing pages under /ur/ answer with HTTP 404 and the UR "page not found" page.
+ErrorDocument 404 /ur/404.html

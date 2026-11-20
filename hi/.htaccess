@@ -1,0 +1,2 @@
+# Missing pages under /hi/ answer with HTTP 404 and the HI "page not found" page.
+ErrorDocument 404 /hi/404.html

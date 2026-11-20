@@ -1,0 +1,34 @@
+/* Journal article pages (blog/<article>/ in every language). Loaded after each page's inline #blog-css, which it
+   refines; the Journal index does not load it.
+   - Masthead: the article's category above the title, then the date, in one rubric line (the Journal's own kicker:
+     bronze label, short hairline, date in stone).
+   - Desktop (1024px+): a smaller photograph, aligned with the title and the text column (see below). Tablets and
+     phones keep the full-width photograph under the title, as before.
+   - Related reading: the service pages' "Related" / "From the Journal" card band (css/related-cards.css,
+     js/related-cards.js) under a Journal-style heading. */
+
+.bl-art-rub{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase}
+.bl-art-cat{display:inline-flex;align-items:center;gap:12px;color:var(--bronze-text)}
+.bl-art-cat::after{content:"";width:22px;height:1px;background:currentColor;opacity:.5}
+.bl-art-rub .bl-art-date{letter-spacing:.12em;color:var(--stone)}
+[dir=rtl] .bl-art-rub,:lang(hi) .bl-art-rub,:lang(ja) .bl-art-rub,:lang(ko) .bl-art-rub,:lang(zh) .bl-art-rub{letter-spacing:0;text-transform:none;font-size:12.5px}
+[dir=rtl] .bl-art-rub .bl-art-date,:lang(hi) .bl-art-rub .bl-art-date,:lang(ja) .bl-art-rub .bl-art-date,:lang(ko) .bl-art-rub .bl-art-date,:lang(zh) .bl-art-rub .bl-art-date{letter-spacing:0}
+/* the date keeps its own digits and order inside right-to-left text */
+[dir=rtl] .bl-art-rub .bl-art-date{unicode-bidi:isolate}
+
+/* Desktop (1024px+): only the photograph changes; breadcrumb, title block and article text keep their original
+   places. The photograph starts on the same edge as the breadcrumb and title (the content's start edge) and ends
+   where the article's text column ends (one grid column in, plus the text's 46rem measure), at 16:9 - so it ties the
+   headline to the text below it instead of running across the whole page. Same position mirrored in right-to-left
+   languages. */
+@media(min-width:1024px){
+  .bl-d-fig{justify-self:start;width:100%;max-width:min(100%,calc((100% - var(--gutter) * 11) / 12 + var(--gutter) + 46rem));aspect-ratio:16/9}
+  .bl-d-fig picture{display:block;width:100%;height:100%}
+  .bl-d-fig img{width:100%;height:100%;object-fit:cover}
+}
+
+/* Related reading: the shared card band; the heading as on the Journal ("Latest News") */
+.bl-rel-sec .bl-rel-h{grid-column:1/-1;margin:0 0 clamp(24px,2.6vw,36px);padding-top:clamp(24px,2.4vw,34px);border-top:1px solid var(--rule);font-family:var(--font-display);font-weight:300;font-size:clamp(26px,2.4vw,36px);line-height:1.1;letter-spacing:-.012em;text-transform:none;color:var(--ink)}
+[dir=rtl] .bl-rel-sec .bl-rel-h,:lang(hi) .bl-rel-sec .bl-rel-h,:lang(ja) .bl-rel-sec .bl-rel-h,:lang(ko) .bl-rel-sec .bl-rel-h,:lang(zh) .bl-rel-sec .bl-rel-h{letter-spacing:0;line-height:1.25}
+.bl-rel-sec{padding-top:clamp(48px,5vw,80px)}
+.bl-rel-sec + .bl-cta-sec{margin-top:0}

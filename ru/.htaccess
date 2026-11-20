@@ -1,0 +1,2 @@
+# Missing pages under /ru/ answer with HTTP 404 and the RU "page not found" page.
+ErrorDocument 404 /ru/404.html

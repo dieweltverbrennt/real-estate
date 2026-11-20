@@ -1,0 +1,2 @@
+# Missing pages under /de/ answer with HTTP 404 and the DE "page not found" page.
+ErrorDocument 404 /de/404.html

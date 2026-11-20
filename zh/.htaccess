@@ -1,0 +1,2 @@
+# Missing pages under /zh/ answer with HTTP 404 and the ZH "page not found" page.
+ErrorDocument 404 /zh/404.html

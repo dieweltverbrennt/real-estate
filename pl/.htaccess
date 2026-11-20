@@ -1,0 +1,2 @@
+# Missing pages under /pl/ answer with HTTP 404 and the PL "page not found" page.
+ErrorDocument 404 /pl/404.html

@@ -1,0 +1,2 @@
+# Missing pages under /ar/ answer with HTTP 404 and the AR "page not found" page.
+ErrorDocument 404 /ar/404.html

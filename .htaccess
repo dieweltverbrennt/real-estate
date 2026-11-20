@@ -1,0 +1,2 @@
+# Missing pages under / answer with HTTP 404 and the English "page not found" page.
+ErrorDocument 404 /404.html

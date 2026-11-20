@@ -1,0 +1,2 @@
+# Missing pages under /id/ answer with HTTP 404 and the ID "page not found" page.
+ErrorDocument 404 /id/404.html

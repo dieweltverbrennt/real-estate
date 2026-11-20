@@ -108,3 +108,16 @@
 [dir="rtl"] .cs-d .cs-exp a.cs-exp-a:focus-visible .cs-exp-arrow { transform: translateX(-5px); }
 .cs-d .cs-exp a.cs-exp-a:focus-visible { outline: 2px solid var(--bronze); outline-offset: 6px; }
 @media (prefers-reduced-motion: reduce) { .cs-d .cs-exp-arrow { transition: none; } }
+
+/* "Related Case Studies" on phones: a swipeable carousel, as the "Related" band on the service pages
+   (css/related-cards.css + js/related-cards.js, which also draw and drive the progress line and arrows here).
+   The cards keep their own design; each takes the band's phone width - 1.15 cards per row, so the next card
+   peeks in at the edge - and the row snaps card by card. Tablets and desktops keep the grid, without controls. */
+@media(max-width:620px){
+  .cs-rel .cs-cards{display:flex;column-gap:var(--gutter);overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  .cs-rel .cs-cards::-webkit-scrollbar{display:none}
+  .cs-rel .cs-card{flex:0 0 calc((100% - var(--gutter)) / 1.15);min-width:0;scroll-snap-align:start}
+  .cs-rel .cs-card:focus-visible{outline-offset:-3px}
+}
+@media(min-width:621px){.cs-rel .rc-ctrl{display:none}}
+.cs-rel.is-static .rc-ctrl{display:none}

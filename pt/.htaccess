@@ -1,0 +1,2 @@
+# Missing pages under /pt/ answer with HTTP 404 and the PT "page not found" page.
+ErrorDocument 404 /pt/404.html

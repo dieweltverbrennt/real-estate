@@ -1,0 +1,2 @@
+# Missing pages under /fa/ answer with HTTP 404 and the FA "page not found" page.
+ErrorDocument 404 /fa/404.html

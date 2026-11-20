@@ -1,0 +1,72 @@
+/* "Related" and "From the Journal" on the service pages: one editorial band of cards. Each card is a whole link - a 3:2
+   photograph of where it leads, the section's own label as a small bronze kicker, the link text as a display-serif
+   title, and the round arrow of the contact section's routes, which turns upright and fills on hover while the
+   photograph eases in a touch. The site's tokens, fonts and hairlines throughout. Behaviour: js/related-cards.js.
+
+   One card size everywhere, set by the content width: 3.5 cards per width on desktops, 2.4 on tablets, 1.15 on phones.
+   - More cards than fit: a carousel across the full content width (inside the page margins, clear of the page
+     scrollbar at the window's right edge), the next card peeking in at the edge; under it a thin progress line and
+     two round arrows, as on the Journal's Latest News rail. Swipe, trackpad or arrows; it snaps card by card.
+   - A pair (.rc-n2): side by side from the content start edge, at the same card size on desktops and tablets (no controls); on phones,
+     where two do not fit side by side, the same swipeable carousel instead of a stacked list.
+   All cards in a band keep one height, so their arrows sit on one line. */
+.rc-sec{--rc-per:1.15;--rc-gaps:1;padding-block:clamp(56px,6.4vw,100px)}
+@media(min-width:620px){.rc-sec{--rc-per:2.4;--rc-gaps:2}}
+@media(min-width:1024px){
+  .rc-sec{--rc-per:3.5;--rc-gaps:3}
+  /* the page margin (at least 41px here) keeps the cards clear of the page scrollbar; never less than 28px */
+  .rc-sec .grid{padding-inline-end:max(var(--margin),28px)}
+}
+.rc-list{grid-column:1/-1;list-style:none;margin:0;padding:0;display:flex;column-gap:var(--gutter);overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.rc-list::-webkit-scrollbar{display:none}
+/* each slot clips to itself: the tilted arrow's corner box would otherwise widen the row a few pixels past the last
+   card, so the row could never report reaching its end (the circle itself sits well inside the card) */
+.rc-list>li{flex:0 0 calc((100% - var(--gutter) * var(--rc-gaps)) / var(--rc-per));min-width:0;scroll-snap-align:start;overflow:hidden}
+/* a pair on desktops and tablets: a row exactly two cards wide, so the cards keep the common size, starting at the
+   content's start edge like the rest of the page (the left edge; the right edge in right-to-left languages) */
+@media(min-width:620px){
+  .rc-n2 .rc-list{width:calc((100% - var(--gutter) * var(--rc-gaps)) / var(--rc-per) * 2 + var(--gutter));justify-self:start}
+  .rc-n2 .rc-list>li{flex-basis:calc((100% - var(--gutter)) / 2)}
+  .rc-n2 .rc-ctrl{display:none}
+}
+
+.rc-card{display:flex;flex-direction:column;height:100%;color:inherit;text-decoration:none}
+.rc-fig{position:relative;display:block;overflow:hidden;aspect-ratio:3/2;background:var(--sand)}
+.rc-fig picture{display:block;width:100%;height:100%}
+.rc-fig img{display:block;width:100%;height:100%;object-fit:cover;object-position:var(--op,50% 50%);transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+/* the text area under the photograph: the label on top, the title below it, the arrow anchored to the bottom corner */
+.rc-body{display:grid;grid-template-columns:minmax(0,1fr) 44px;grid-template-rows:auto 1fr;column-gap:18px;padding-top:clamp(14px,1.3vw,18px);border-bottom:1px solid var(--rule);padding-bottom:clamp(14px,1.3vw,18px);flex:1}
+.rc-kick{grid-column:1/-1;display:flex;align-items:center;gap:12px;margin:0 0 10px;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--bronze-text)}
+.rc-kick::after{content:"";width:22px;height:1px;background:currentColor;opacity:.5}
+.rc-t{grid-row:2;grid-column:1;align-self:start;margin:0;font-family:var(--font-display);font-weight:300;font-size:clamp(20px,1.6vw,24px);line-height:1.12;letter-spacing:-.012em;color:var(--ink);text-wrap:balance;overflow-wrap:break-word}
+.rc-t::first-letter{text-transform:uppercase}
+/* the contact routes' arrow: a circle, the arrow tilted up; on hover it turns to point ahead and fills */
+.rc-go{grid-row:2;grid-column:2;align-self:end;display:grid;place-items:center;width:44px;height:44px;margin-top:12px;border:1px solid var(--ink);border-radius:50%;font-family:var(--font-text);font-size:16px;line-height:1;color:var(--ink);transform:rotate(-45deg);transition:background-color .4s,color .4s,transform .5s cubic-bezier(.2,.7,.2,1)}
+.rc-go::before{content:"\2192"}
+[dir=rtl] .rc-go{transform:rotate(45deg)}
+[dir=rtl] .rc-go::before{content:"\2190"}
+@media(hover:hover){
+  .rc-card:hover .rc-fig img{transform:scale(1.035)}
+  .rc-card:hover .rc-go,[dir=rtl] .rc-card:hover .rc-go{background:var(--ink);color:var(--limestone);transform:rotate(0)}
+}
+.rc-card:active .rc-go{background:var(--ink);color:var(--limestone)}
+.rc-card:focus-visible{outline:2px solid var(--bronze);outline-offset:-3px}
+[dir=rtl] .rc-kick,:lang(hi) .rc-kick,:lang(ja) .rc-kick,:lang(ko) .rc-kick,:lang(zh) .rc-kick{letter-spacing:0;text-transform:none;font-size:12.5px}
+[dir=rtl] .rc-t,:lang(hi) .rc-t,:lang(ja) .rc-t,:lang(ko) .rc-t,:lang(zh) .rc-t{letter-spacing:0;line-height:1.25}
+@media(max-width:1023px){.rc-go{width:40px;height:40px}.rc-body{grid-template-columns:minmax(0,1fr) 40px;column-gap:16px}}
+
+/* controls, at the row's width */
+.rc-ctrl{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:clamp(22px,2.2vw,30px)}
+.rc-prog{flex:1;position:relative;height:1px;margin-inline-end:14px;background:var(--rule)}
+.rc-prog i{position:absolute;top:-.5px;height:2px;width:var(--w,50%);inset-inline-start:calc((100% - var(--w,50%)) * var(--p,0));background:var(--ink);transition:inset-inline-start .12s linear}
+.rc-arrow{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--rule);background:none;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;transition:border-color .3s,background-color .3s,color .3s,opacity .3s}
+.rc-arrow svg{width:20px;height:11px}
+.rc-arrow[data-dir=prev] svg,[dir=rtl] .rc-arrow[data-dir=next] svg{transform:scaleX(-1)}
+[dir=rtl] .rc-arrow[data-dir=prev] svg{transform:none}
+@media(hover:hover){.rc-arrow:hover:not(:disabled){border-color:var(--ink)}}
+.rc-arrow:active:not(:disabled){background:var(--ink);color:var(--limestone);border-color:var(--ink)}
+.rc-arrow:disabled{opacity:.3;cursor:default}
+.rc-arrow:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
+/* nothing to scroll: no controls */
+.rc-sec.is-static .rc-ctrl{display:none}
+@media(prefers-reduced-motion:reduce){.rc-fig img,.rc-go,.rc-prog i{transition:none}.rc-card:hover .rc-fig img{transform:none}}

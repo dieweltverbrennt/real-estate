@@ -153,47 +153,60 @@
       }
 
     } else {   // ---- C. The Gallery ---------------------------------------------------------------------------------------
-      // an asymmetrical editorial grid: a centred introduction, then the guides in rows built from a fixed cycle of
-      // four templates on a 12-column grid, alternating where the weight sits -
-      //   6|3|3 (heavy left) · 5|7 (heavy right) · 7|5 (heavy left) · 3|3|6 (heavy right)
-      // Every photograph is shown whole, at its own proportions (no frame, no cropping). Any articles left over at the
-      // end take a two-card row on the matching side, or - a single one - a horizontal closing feature, so new
-      // articles never break the composition. Phones: the large cards at full width, the small ones as compact rows
-      // with the picture alternating sides.
+      // an editorial spread: a centred masthead; an opening spread - the newest guide as the feature, beside it an
+      // "Also new" column with the next three as numbered briefs; then "More guides" in rows where every photograph of a
+      // row has the same height and the widths follow each photograph's own proportions, filling the row edge to edge.
+      // Nothing is ever cropped. Rows hold three (a pair every third row); a single leftover joins the row before it.
       var W = withDemo(A);
+      var ratio = function (a) {
+        var im = a.pic.querySelector('img'), w = +im.getAttribute('width'), h = +im.getAttribute('height');
+        return w && h ? w / h : 1.5;
+      };
+      var card = function (a, idx, cls, tag, sizes, eager) {
+        var c = add(link(a, 'jc-card ' + cls),
+          add(el('span', 'jc-pic'), pic(a, sizes, eager)),
+          add(el('span', 'jc-txt'),
+            el('span', 'jc-no', 'No. ' + pad(idx + 1) + ' — ' + a.date),
+            el(tag, 'jc-h', a.title),
+            el('span', 'jc-sf', a.ex)));
+        c.style.setProperty('--ar', ratio(a).toFixed(4));
+        return c;
+      };
       add(g, add(el('header', 'jc-head'),
         el('p', 'jc-eyebrow', head.eyebrow),
         el('h1', 'jc-title', head.title),
         el('p', 'jc-lede', head.lede)));
       add(g, add(el('p', 'jc-folio'), el('span', null, 'Catalogue'), el('span', null, month + ' · ' + W.length + ' guides')));
-      var CYCLE = ['t1', 't2', 't3', 't4'];
-      var ROLES = { t1: ['major', 'minor', 'minor'], t2: ['minor', 'major'], t3: ['major', 'minor'], t4: ['minor', 'minor', 'major'], solo: ['major'] };
-      var SIZES = {
-        major: '(max-width:700px) calc(100vw - 32px), (max-width:1023px) 92vw, 54vw',
-        minor: '(max-width:700px) 44vw, (max-width:1023px) 46vw, 40vw'
-      };
-      var rows = el('div', 'jc-rows'), at = 0, k = 0, nMinor = 0;
-      while (at < W.length) {
-        var t = CYCLE[k % CYCLE.length], left = W.length - at, n = ROLES[t].length;
-        if (left < n) { t = left === 1 ? 'solo' : (t === 't1' || t === 't3' ? 't3' : 't2'); n = left; }
-        var row = el('div', 'jc-row jc-' + t);
-        W.slice(at, at + n).forEach(function (a, j) {
-          var idx = at + j, role = ROLES[t][j];
-          var card = add(link(a, 'jc-card is-' + role + (idx === 0 ? ' is-lead' : '') + (role === 'minor' && nMinor++ % 2 ? ' is-flip' : '')),
-            add(el('span', 'jc-pic'), pic(a, SIZES[role], k === 0)),
-            add(el('span', 'jc-cap'),
-              el('span', 'jc-no', 'No. ' + pad(idx + 1) + ' — ' + a.date),
-              el('h2', 'jc-h', a.title),
-              el('span', 'jc-sf', a.ex)));
-          // the photograph's own proportions (from the img's width and height), for the 3:2 envelope in the CSS
-          var im = card.querySelector('img'), w = +im.getAttribute('width'), h = +im.getAttribute('height');
-          if (w && h) card.querySelector('.jc-pic').style.setProperty('--ar', (w / h).toFixed(4));
-          add(row, card);
-        });
-        add(rows, row);
-        at += n; k++;
+
+      // opening spread
+      var open = add(el('div', 'jc-open'), card(W[0], 0, 'jc-feat', 'h2', '(max-width:1023px) calc(100vw - 32px), 58vw', true));
+      if (W.length > 1) {
+        var side = add(el('div', 'jc-side'), el('h2', 'jc-side-h', 'Also new'));
+        W.slice(1, 4).forEach(function (a, i) { add(side, card(a, i + 1, 'jc-brief', 'h3', '(max-width:700px) 38vw, 16vw', true)); });
+        add(open, side);
       }
-      add(g, rows);
+      add(g, open);
+
+      // more guides: rows of equal-height photographs
+      var rest = W.slice(4);
+      if (rest.length) {
+        add(g, add(el('div', 'jc-sec'), el('h2', 'jc-sec-h', 'More guides'), el('span', 'jc-sec-n', rest.length + (rest.length > 1 ? ' guides' : ' guide'))));
+        var plan = [], left = rest.length, CYC = [3, 3, 2], k = 0;
+        while (left > 0) { var n = Math.min(CYC[k++ % CYC.length], left); plan.push(n); left -= n; }
+        if (plan.length > 1 && plan[plan.length - 1] === 1) { plan.pop(); plan[plan.length - 1] += 1; }
+        var rows = el('div', 'jc-rows'), at = 4;
+        plan.forEach(function (n) {
+          var row = el('div', 'jc-row');
+          W.slice(at, at + n).forEach(function (a, j) {
+            var c = card(a, at + j, 'jc-story', 'h3', '(max-width:700px) calc(100vw - 32px), 44vw', false);
+            c.style.flexGrow = ratio(a).toFixed(4);   // width in proportion to the photograph: one height per row
+            add(row, c);
+          });
+          add(rows, row);
+          at += n;
+        });
+        add(g, rows);
+      }
     }
     main.insertBefore(sec, main.firstChild);
     document.documentElement.classList.add('jv-ready');

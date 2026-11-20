@@ -1,0 +1,2 @@
+# Missing pages under /nl/ answer with HTTP 404 and the NL "page not found" page.
+ErrorDocument 404 /nl/404.html

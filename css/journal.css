@@ -1,0 +1,340 @@
+/* BITOQU Journal index - editorial layout (all 19 language versions of /blog/).
+   Sections: masthead (.bl-hero) - sticky category navigation (.jr-nav) - Featured Story - Latest (rail) - Must Read -
+   Explore the Journal - filtered results (shown instead of the four editorial sections when a category is chosen).
+   Uses the site's own tokens (palette, fonts, grid, hairlines) from the page's inline stylesheet; nothing new is
+   introduced visually except layout. Behaviour: js/journal.js. Every photograph is cropped with object-fit:cover inside
+   a fixed aspect ratio; the focal point comes from --op (landscape frames) and --opp (portrait frames) on each card. */
+
+/* masthead, after the magazine-page model: a centred title in open space, one quiet cover line under it (a short line
+   and a compact Subscribe button), then the category bar between two column-width hairlines. The title is BITOQU's
+   display serif (light), ink, at most 50px; its scale follows the viewport so it stays on one line on phones; long
+   translations wrap, balanced, instead of overflowing. */
+.jr-page{--jr-sp:clamp(56px,5.6vw,88px)}   /* one vertical rhythm for the space between editorial sections */
+.jr-page .bl-hero{padding-top:calc(76px + env(safe-area-inset-top,0px) + clamp(26px,2.8vw,40px));padding-bottom:clamp(28px,3vw,42px)}
+.jr-page .bl-hero .bl-in{max-width:none;text-align:center}
+.jr-page .bl-hero .bl-h1{margin:0 auto;max-width:14em;font-size:clamp(28px,3.5vw,50px);line-height:1.05;letter-spacing:-.02em;text-wrap:balance}
+/* joined and syllabic scripts and CJK: no negative tracking (it would break letter joins or crowd the glyphs) */
+[dir=rtl] .jr-page .bl-hero .bl-h1,:lang(hi) .jr-page .bl-hero .bl-h1,:lang(ja) .jr-page .bl-hero .bl-h1,:lang(ko) .jr-page .bl-hero .bl-h1,:lang(zh) .jr-page .bl-hero .bl-h1{letter-spacing:0;line-height:1.08}
+/* cover line with Subscribe (visual only for now): the button is the site's solid ink button (as .jr-btn) at its most
+   compact - limestone text, 2px corners, about 30px tall; on narrow screens it wraps under the line */
+.jr-sub{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 18px;margin-top:clamp(14px,1.5vw,22px)}
+.jr-sub-line{margin:0;font-family:var(--font-text);font-size:14px;font-weight:400;line-height:1.4;color:var(--stone-deep)}
+.jr-sub-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;font:inherit;font-family:var(--font-text);font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;line-height:1;white-space:nowrap;color:var(--limestone);background:var(--ink);border:1px solid var(--ink);border-radius:2px;padding:9px 14px 8px;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .3s,border-color .3s}
+/* hover and pressed: the site's own button hover - the contact form's submit button (.submit: ink to bronze, a 0.3s
+   background fade), the closest existing button to this one; the 1px border follows the background. Hover only where
+   a real pointer hovers, so a tap on a phone does not leave it bronze; pressing shows the same bronze, so a touch gets
+   the same feedback a pointer gets on hover. */
+@media(hover:hover){.jr-sub-btn:hover{background:var(--bronze);border-color:var(--bronze)}}
+.jr-sub-btn:active{background:var(--bronze);border-color:var(--bronze)}
+.jr-sub-btn:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
+[dir=rtl] .jr-sub-btn,:lang(hi) .jr-sub-btn,:lang(ja) .jr-sub-btn,:lang(ko) .jr-sub-btn,:lang(zh) .jr-sub-btn{letter-spacing:0;text-transform:none;font-size:12.5px;font-weight:500}
+
+/* ---------- shared pieces ---------- */
+.jr-fig{position:relative;overflow:hidden;margin:0;background:var(--sand)}
+.jr-fig img{display:block;width:100%;height:100%;object-fit:cover;object-position:var(--op,50% 50%);transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+.jr-fig picture{display:block;width:100%;height:100%}
+a:hover .jr-fig img,a:focus-visible .jr-fig img{transform:scale(1.04)}
+.jr-card{display:block;text-decoration:none;color:inherit}
+.jr-card:focus-visible{outline:2px solid var(--bronze);outline-offset:6px}
+
+/* category + date. The hairline separator sits in each item's leading padding; the inner row is pulled back by that
+   padding and the outer box clips it, so whichever item starts a line loses its separator - when a long category
+   wraps the date onto a second line, no stray dash is left at the start of that line. */
+.jr-rub{margin:0;overflow:hidden;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;line-height:1.5}
+.jr-rub-in{display:flex;flex-wrap:wrap;row-gap:3px;margin-inline-start:-38px}
+.jr-rub-in>*{position:relative;padding-inline-start:38px}
+.jr-rub-in>*::before{content:"";position:absolute;inset-inline-start:12px;top:50%;width:14px;height:1px;background:currentColor;opacity:.5}
+.jr-rub .jr-cat{color:var(--bronze-text)}
+.jr-rub time{color:var(--stone)}
+
+.jr-t{font-family:var(--font-display);font-weight:300;letter-spacing:-.01em;color:var(--ink);overflow-wrap:break-word;text-wrap:balance;margin:10px 0 0}
+.jr-ex{margin:12px 0 0;color:var(--stone-deep);font-size:15px;line-height:1.56;text-wrap:pretty}
+.jr-cta{margin:18px 0 0;font-family:var(--font-text);font-size:12px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);display:inline-flex;align-items:center;gap:10px}
+.jr-cta::after{content:"\2192";color:var(--bronze-text);transition:transform .4s}
+a:hover .jr-cta::after{transform:translateX(5px)}
+[dir=rtl] .jr-cta::after{content:"\2190"}
+[dir=rtl] a:hover .jr-cta::after{transform:translateX(-5px)}
+
+/* section heading row: hairline, display-serif title, optional controls at the end */
+.jr-head{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1px solid var(--rule);padding-top:clamp(16px,1.5vw,22px);margin-bottom:clamp(22px,2.2vw,34px)}
+/* section titles sit a clear step below the page title (max 50px) */
+.jr-h2{font-family:var(--font-display);font-weight:300;letter-spacing:-.014em;line-height:1.05;margin:0;font-size:clamp(25px,2.3vw,34px);color:var(--ink)}
+
+/* ---------- category navigation ----------
+   Between two hairlines at the content width (the reference's section band). While the bar is pinned under the site
+   header, the header's own border takes the place of the upper one and the lower one widens to the full width. All
+   labels in ink; the chosen one is underlined. */
+.jr-nav{position:sticky;top:calc(76px + env(safe-area-inset-top,0px));z-index:15;background:var(--limestone)}
+.jr-nav::before{content:"";position:absolute;left:var(--margin);right:var(--margin);top:0;height:1px;background:var(--rule);pointer-events:none}
+.jr-nav.is-stuck::before{display:none}
+.jr-nav::after{content:"";position:absolute;left:var(--margin);right:var(--margin);bottom:0;height:1px;background:var(--rule);pointer-events:none}
+.jr-nav.is-stuck::after{left:0;right:0}
+.jr-nav-sc{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.jr-nav-sc::-webkit-scrollbar{display:none}
+.jr-nav-ul{list-style:none;margin:0 auto;padding:0 var(--margin);display:flex;gap:clamp(22px,2.4vw,40px);width:max-content}
+.jr-tab{position:relative;display:block;font:inherit;font-family:var(--font-text);font-size:12px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;line-height:1.3;white-space:nowrap;color:var(--ink);background:none;border:0;border-radius:0;padding:15px 0 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.jr-tab::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .45s cubic-bezier(.7,0,.2,1)}
+[dir=rtl] .jr-tab::after{transform-origin:right}
+.jr-tab[aria-pressed=true]::after{transform:scaleX(1)}
+.jr-tab:focus-visible{outline:2px solid var(--bronze);outline-offset:-4px}
+/* always one line, centred when it fits; when a language does not fit, the line scrolls (swipe, trackpad or mouse
+   wheel) and a soft edge shows there is more on that side */
+.jr-nav-sc[data-fade=end]{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 48px),transparent)}
+.jr-nav-sc[data-fade=start]{-webkit-mask-image:linear-gradient(to right,transparent,#000 48px);mask-image:linear-gradient(to right,transparent,#000 48px)}
+.jr-nav-sc[data-fade=both]{-webkit-mask-image:linear-gradient(to right,transparent,#000 48px,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(to right,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
+@media(max-width:1023px){.jr-tab{padding:14px 0 13px}}
+@media(min-width:1024px){
+  .jr-nav-ul{gap:clamp(16px,1.5vw,32px)}
+  .jr-tab{font-size:11.5px;letter-spacing:.08em}
+}
+html[data-journal] .jr-nav{display:none}
+
+/* ---------- A. Featured Story ---------- */
+.jr-feat-sec{padding:clamp(28px,2.8vw,44px) 0 var(--jr-sp)}
+.jr-feat{grid-column:1/-1;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--gutter);text-decoration:none;color:inherit}
+.jr-feat:focus-visible{outline:2px solid var(--bronze);outline-offset:8px}
+.jr-feat .jr-fig{grid-column:1/span 8;aspect-ratio:3/2}
+.jr-feat-txt{grid-column:9/span 4;align-self:center;padding-inline-start:clamp(4px,1vw,20px)}
+.jr-feat-t{font-size:clamp(27px,2.9vw,42px);line-height:1.06;letter-spacing:-.018em;margin-top:14px}
+.jr-feat-dek{margin:18px 0 0;font-family:var(--font-display);font-weight:300;font-size:clamp(17px,1.32vw,21px);line-height:1.42;color:var(--stone-deep);text-wrap:pretty}
+.jr-feat .jr-cta{margin-top:26px}
+@media(max-width:1023px){
+  .jr-feat .jr-fig{grid-column:1/-1}
+  .jr-feat-txt{grid-column:1/-1;max-width:44rem;padding:0;margin-top:clamp(22px,3vw,32px)}
+}
+@media(max-width:619px){
+  .jr-feat-sec{padding-top:0}
+  .jr-feat .jr-fig{margin-inline:calc(var(--margin) * -1);aspect-ratio:4/5}
+  .jr-feat .jr-fig img{object-position:var(--opp,50% 50%)}
+}
+
+/* ---------- B. Latest: horizontal rail on the page background ---------- */
+.jr-latest{color:var(--ink);padding:calc(var(--jr-sp) * .7) 0 calc(var(--jr-sp) * .8)}
+.jr-ctrl{display:flex;gap:10px;flex:none}
+.jr-arrow{width:48px;height:48px;border-radius:50%;border:1px solid var(--rule);background:none;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:border-color .3s,opacity .3s}
+.jr-arrow:hover:not(:disabled){border-color:var(--ink)}
+.jr-arrow:disabled{opacity:.3;cursor:default}
+.jr-arrow:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
+.jr-arrow svg{width:22px;height:12px}
+.jr-arrow[data-dir=prev] svg,[dir=rtl] .jr-arrow[data-dir=next] svg{transform:scaleX(-1)}
+[dir=rtl] .jr-arrow[data-dir=prev] svg{transform:none}
+.jr-latest.is-static .jr-ctrl,.jr-latest.is-static .jr-prog{visibility:hidden}
+
+.jr-rail{--g:clamp(14px,1.6vw,26px);--cw:74vw;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline:var(--margin);scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.jr-rail::-webkit-scrollbar{display:none}
+.jr-track{list-style:none;margin:0;padding:0 var(--margin);display:flex;gap:var(--g);width:max-content}
+.jr-track>li{width:var(--cw);flex:none;scroll-snap-align:start}
+@media(min-width:620px){.jr-rail{--cw:calc((100vw - var(--margin)*2 - var(--g)*2) / 2.4)}}
+@media(min-width:1024px){.jr-rail{--cw:calc((100vw - var(--margin)*2 - var(--g)*3) / 3.55)}}
+@media(min-width:1600px){.jr-rail{--cw:calc((100vw - var(--margin)*2 - var(--g)*4) / 4.4)}}
+/* landscape frames, close to the photographs' own proportions: a lighter row that still shows the photography */
+.jr-lc{color:var(--ink)}
+.jr-lc .jr-fig{aspect-ratio:3/2}
+@media(max-width:619px){.jr-lc .jr-fig{aspect-ratio:4/3}}
+.jr-lc .jr-rub{margin-top:15px}
+.jr-lc .jr-t{font-size:clamp(19px,1.45vw,22px);line-height:1.2;margin-top:8px}
+.jr-prog{grid-column:1/-1;position:relative;height:1px;background:var(--rule);margin-top:clamp(22px,2.2vw,32px)}
+.jr-prog i{position:absolute;top:-.5px;height:2px;width:var(--w,30%);inset-inline-start:calc((100% - var(--w,30%)) * var(--p,0));background:var(--ink);transition:inset-inline-start .12s linear}
+
+/* ---------- C. Must Read: a quiet band of equal stories ----------
+   A faint sand tint across the full width, set apart from its neighbours by limestone space; a small, centred,
+   letter-spaced title between hairlines; then the four stories in one row (two by two on narrower screens, a list on
+   phones), each a square picture beside its category, headline and date. Mirrors automatically in RTL. */
+.jr-must{margin-top:calc(var(--jr-sp) * .6);padding-bottom:clamp(24px,2.2vw,34px);background:var(--limestone);background:color-mix(in srgb,var(--sand) 40%,var(--limestone))}
+.jr-mh{grid-column:1/-1;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);text-align:center;padding:clamp(18px,1.6vw,24px) 0}
+.jr-mh-t{margin:0;font-family:var(--font-text);font-weight:500;font-size:clamp(13px,1vw,15px);letter-spacing:.2em;text-transform:uppercase;line-height:1.3;color:var(--ink)}
+.jr-mlist{grid-column:1/-1;list-style:none;margin:0;padding:clamp(20px,1.8vw,28px) 0 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px clamp(24px,2.6vw,44px)}
+.jr-mi{--th:clamp(92px,7.6vw,128px);display:grid;grid-template-columns:var(--th) minmax(0,1fr);gap:clamp(14px,1.3vw,20px);align-items:start}
+.jr-mi .jr-fig{aspect-ratio:1/1}
+.jr-mi-cat,.jr-mi-date{margin:0;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;line-height:1.4}
+.jr-mi-cat{color:var(--bronze-text)}
+.jr-mi-date{margin-top:12px;color:var(--stone)}
+.jr-mi-date time{unicode-bidi:isolate}
+.jr-mi .jr-t{font-size:clamp(17px,1.3vw,20px);line-height:1.22;margin-top:7px}
+.jr-mi:hover .jr-t{color:var(--bronze-text)}
+.jr-mi .jr-t{transition:color .3s}
+@media(max-width:1199px){.jr-mlist{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:619px){
+  .jr-mlist{grid-template-columns:minmax(0,1fr);gap:0;padding-top:4px}
+  .jr-mlist>li{padding:18px 0}
+  .jr-mlist>li+li{border-top:1px solid var(--rule)}
+  .jr-mi{--th:96px}
+}
+
+/* ---------- D. Explore the Journal: every story except the Featured one, in an even grid ----------
+   three equal columns on desktop, two on tablets, one on phones; every card the same: a 3:2 picture, category and
+   date, headline, standfirst and link - the link sits on the card's bottom edge so a row lines up even when the
+   standfirsts differ in length. Columns mirror automatically in RTL. */
+.jr-explore{padding:calc(var(--jr-sp) * .6) 0 var(--jr-sp)}
+.jr-ex-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(40px,3.6vw,56px) var(--gutter)}
+.jr-ec{display:flex;flex-direction:column;height:100%}
+.jr-ec .jr-fig{aspect-ratio:3/2}
+.jr-ec-txt{display:flex;flex-direction:column;flex:1}
+.jr-ec .jr-rub{margin-top:18px}
+.jr-ec .jr-t{font-size:clamp(20px,1.6vw,25px);line-height:1.17}
+.jr-ec .jr-ex{font-size:14.5px}
+.jr-ec .jr-cta{margin-top:auto;padding-top:16px;align-self:flex-start}
+/* where supported, the cards of a row share their row lines (picture, category line, headline, standfirst, link), so
+   a category that wraps in one card - long translations on narrower screens - moves the whole row's headlines
+   together instead of leaving them out of line */
+@supports (grid-template-rows:subgrid){
+  .jr-ex-grid{--rg:clamp(40px,3.6vw,56px);row-gap:0;margin-bottom:calc(var(--rg) * -1)}
+  .jr-ec{display:grid;grid-row:span 5;grid-template-rows:subgrid;height:auto;padding-bottom:var(--rg)}
+  .jr-ec-txt{display:contents}
+  .jr-ec .jr-cta{margin-top:0;align-self:end}
+}
+@media(max-width:1023px){.jr-ex-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:619px){.jr-ex-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* pagination (Explore the Journal, and a category's stories): centred under the grid. Next page is the one prominent
+   control - a bronze pill in the shape of the site's other pill buttons (the darker bronze, so the light text keeps a
+   clear contrast), with the arrow; Previous page sits under it as a quiet text link. js/journal.js shows the pager only
+   when there is more than one page, and hides each control where it does not apply. */
+.jr-pager{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:clamp(44px,4vw,64px)}
+.jr-pager-next{display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:54px;padding:0 32px;font:inherit;font-family:var(--font-text);font-size:15px;font-weight:500;letter-spacing:.01em;white-space:nowrap;color:var(--limestone);background:var(--ink);border:0;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .35s,transform .35s}
+.jr-pager-next:hover{background:var(--bronze-text);transform:translateY(-1px)}
+.jr-pager-next svg{width:22px;height:12px;flex:none;transition:transform .4s}
+.jr-pager-next:hover svg{transform:translateX(4px)}
+[dir=rtl] .jr-pager-next svg{transform:scaleX(-1)}
+[dir=rtl] .jr-pager-next:hover svg{transform:scaleX(-1) translateX(4px)}
+.jr-pager-prev{display:inline-flex;align-items:center;gap:8px;font:inherit;font-family:var(--font-text);font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--stone-deep);background:none;border:0;padding:8px 4px;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-decoration-thickness:1px;text-underline-offset:5px;-webkit-tap-highlight-color:transparent;transition:color .3s,text-decoration-color .3s}
+.jr-pager-prev::before{content:"\2190";color:var(--bronze-text)}
+[dir=rtl] .jr-pager-prev::before{content:"\2192"}
+.jr-pager-prev:hover{color:var(--ink);text-decoration-color:currentColor}
+.jr-pager-next:focus-visible,.jr-pager-prev:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
+/* section headings take focus after a page change; they are not controls, so no ring */
+.jr-h2[tabindex="-1"]:focus{outline:none}
+
+/* ---------- filtered results ---------- */
+.jr-results{padding:clamp(28px,2.8vw,44px) 0 var(--jr-sp)}
+.jr-res-head{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:clamp(24px,2.6vw,40px)}
+.jr-res-head .jr-h2{font-size:clamp(28px,2.8vw,40px)}
+.jr-link{font:inherit;font-family:var(--font-text);font-size:12px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--stone-deep);background:none;border:0;padding:8px 0;cursor:pointer;display:inline-flex;align-items:center;gap:10px;transition:color .3s}
+.jr-link::before{content:"\2190";color:var(--bronze-text)}
+[dir=rtl] .jr-link::before{content:"\2192"}
+.jr-link:hover{color:var(--ink)}
+.jr-link:focus-visible,.jr-btn:focus-visible{outline:2px solid var(--bronze);outline-offset:4px}
+.jr-res-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:clamp(40px,3.6vw,60px) var(--gutter)}
+.jr-rc .jr-fig{aspect-ratio:3/2}
+.jr-rc .jr-rub{margin-top:18px}
+.jr-rc .jr-t{font-size:clamp(21px,1.7vw,26px);line-height:1.17}
+.jr-rc .jr-ex{font-size:14.5px}
+/* the first story of a section leads: picture and text side by side across the full width */
+.jr-res-grid>.jr-rc:first-child{grid-column:1/-1;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--gutter);align-items:center;padding-bottom:clamp(40px,3.6vw,60px);border-bottom:1px solid var(--rule)}
+.jr-res-grid>.jr-rc:first-child .jr-fig{grid-column:1/span 7}
+.jr-res-grid>.jr-rc:first-child .jr-rc-txt{grid-column:9/span 4}
+.jr-res-grid>.jr-rc:first-child .jr-rub{margin-top:0}
+.jr-res-grid>.jr-rc:first-child .jr-t{font-size:clamp(25px,2.4vw,34px);line-height:1.08;letter-spacing:-.014em}
+.jr-res-grid>.jr-rc:first-child .jr-ex{font-size:15.5px}
+.jr-res-grid>.jr-rc:only-child{border-bottom:0;padding-bottom:0}
+.jr-res-grid>*{animation:jr-in .7s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes jr-in{from{opacity:0;transform:translateY(8px)}}
+@media(max-width:1023px){
+  .jr-res-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .jr-res-grid>.jr-rc:first-child .jr-fig{grid-column:1/-1}
+  .jr-res-grid>.jr-rc:first-child .jr-rc-txt{grid-column:1/-1;max-width:44rem;margin-top:22px}
+}
+@media(max-width:619px){.jr-res-grid{grid-template-columns:minmax(0,1fr)}}
+.jr-empty{grid-column:1/-1;border-top:1px solid var(--rule);padding:clamp(40px,5vw,72px) 0 0}
+.jr-empty p{margin:0;max-width:40rem;font-family:var(--font-display);font-weight:300;font-size:clamp(22px,2.2vw,32px);line-height:1.25;color:var(--stone-deep)}
+.jr-btn{margin-top:28px;display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:2px;font-family:var(--font-text);font-size:13px;font-weight:500;letter-spacing:.05em;background:var(--ink);color:var(--limestone);border:1px solid var(--ink);cursor:pointer;transition:background .3s,color .3s}
+.jr-btn:hover{background:transparent;color:var(--ink)}
+.jr-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.jr-page [hidden]{display:none!important}
+
+/* ---------- scripts without capitals or with joined letters: no tracking, no uppercase ---------- */
+[dir=rtl] .jr-mh-t,[dir=rtl] .jr-mi-cat,[dir=rtl] .jr-mi-date,[dir=rtl] .jr-rub,[dir=rtl] .jr-cta,[dir=rtl] .jr-tab,[dir=rtl] .jr-link,
+:lang(hi) .jr-mh-t,:lang(hi) .jr-mi-cat,:lang(hi) .jr-mi-date,:lang(hi) .jr-rub,:lang(hi) .jr-cta,:lang(hi) .jr-tab,:lang(hi) .jr-link,
+:lang(ja) .jr-mh-t,:lang(ja) .jr-mi-cat,:lang(ja) .jr-mi-date,:lang(ja) .jr-rub,:lang(ja) .jr-cta,:lang(ja) .jr-tab,:lang(ja) .jr-link,
+:lang(ko) .jr-mh-t,:lang(ko) .jr-mi-cat,:lang(ko) .jr-mi-date,:lang(ko) .jr-rub,:lang(ko) .jr-cta,:lang(ko) .jr-tab,:lang(ko) .jr-link,
+:lang(zh) .jr-mh-t,:lang(zh) .jr-mi-cat,:lang(zh) .jr-mi-date,:lang(zh) .jr-rub,:lang(zh) .jr-cta,:lang(zh) .jr-tab,:lang(zh) .jr-link{letter-spacing:0;text-transform:none}
+[dir=rtl] .jr-tab,:lang(hi) .jr-tab,:lang(ja) .jr-tab,:lang(ko) .jr-tab,:lang(zh) .jr-tab{font-size:13.5px}
+[dir=rtl] .jr-rub,:lang(hi) .jr-rub,:lang(ja) .jr-rub,:lang(ko) .jr-rub,:lang(zh) .jr-rub{font-size:12.5px}
+[dir=rtl] .jr-cta,[dir=rtl] .jr-link,
+:lang(hi) .jr-cta,:lang(hi) .jr-link,
+:lang(ja) .jr-cta,:lang(ja) .jr-link,
+:lang(ko) .jr-cta,:lang(ko) .jr-link,
+:lang(zh) .jr-cta,:lang(zh) .jr-link{font-size:13px}
+[dir=rtl] .jr-mi-cat,[dir=rtl] .jr-mi-date,:lang(hi) .jr-mi-cat,:lang(hi) .jr-mi-date,:lang(ja) .jr-mi-cat,:lang(ja) .jr-mi-date,:lang(ko) .jr-mi-cat,:lang(ko) .jr-mi-date,:lang(zh) .jr-mi-cat,:lang(zh) .jr-mi-date{font-size:12.5px}
+[dir=rtl] .jr-mh-t,:lang(hi) .jr-mh-t,:lang(ja) .jr-mh-t,:lang(ko) .jr-mh-t,:lang(zh) .jr-mh-t{font-size:clamp(15px,1.1vw,17px)}
+/* Japanese: break titles between phrases, not inside words (browsers without auto-phrase keep normal breaking) */
+:lang(ja) .jr-t,:lang(ja) .jr-h2{word-break:auto-phrase}
+/* the date stays in Latin digits and order inside right-to-left text */
+.jr-rub time{unicode-bidi:isolate}
+
+@media(prefers-reduced-motion:reduce){
+  .jr-fig img,.jr-tab::after,.jr-prog i{transition:none}
+  a:hover .jr-fig img{transform:none}
+  .jr-res-grid>*{animation:none}
+}
+
+/* ---------- Subscribe dialog (#jr-sm, js/journal.js) ----------
+   A compact centred card on one axis: a short bronze rule, the Journal's name as a small kicker, the display-serif
+   heading, the description, an underlined field, a full-width solid ink button, the privacy note. The page behind is
+   dimmed with the site's ink. On phones the card keeps its shape with a 16px margin. */
+html.jr-sm-lock{overflow:hidden;scrollbar-gutter:stable}
+.jr-sm{--jr-err:#9a3a2a;position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
+.jr-sm[hidden]{display:none}
+.jr-sm-scrim{position:absolute;inset:0;background:rgba(34,30,25,.46);opacity:0;transition:opacity .35s ease}
+.jr-sm.is-open .jr-sm-scrim{opacity:1}
+.jr-sm-dlg{position:relative;box-sizing:border-box;width:min(460px,100%);max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow:auto;overscroll-behavior:contain;padding:clamp(40px,4.4vw,52px) clamp(24px,3.6vw,46px) clamp(28px,3vw,36px);text-align:center;background:var(--limestone);color:var(--ink);box-shadow:0 30px 80px -24px rgba(34,30,25,.5);opacity:0;transform:translateY(14px);transition:opacity .35s ease,transform .5s cubic-bezier(.2,.7,.2,1)}
+.jr-sm.is-open .jr-sm-dlg{opacity:1;transform:none}
+.jr-sm-dlg:focus{outline:none}
+.jr-sm-x{position:absolute;top:10px;inset-inline-end:10px;z-index:1;width:40px;height:40px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;color:var(--ink);cursor:pointer;transition:background-color .25s}
+.jr-sm-x:hover{background:rgba(34,30,25,.07)}
+.jr-sm-x svg{width:15px;height:15px}
+.jr-sm-x:focus-visible,.jr-sm-go:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
+.jr-sm-kick{margin:0;padding-inline:40px;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--bronze-text)}
+.jr-sm-kick::before{content:"";display:block;width:28px;height:1px;margin:0 auto 18px;background:var(--bronze)}
+.jr-sm-h{margin:12px 0 0;font-family:var(--font-display);font-weight:300;font-size:clamp(27px,2.4vw,32px);line-height:1.08;letter-spacing:-.012em;color:var(--ink);text-wrap:balance}
+.jr-sm-h:focus{outline:none}
+.jr-sm-d{max-width:30em;margin:14px auto 0;font-family:var(--font-text);font-size:15px;line-height:1.55;color:var(--stone-deep);text-wrap:pretty}
+.jr-sm-form{margin:28px 0 0}
+.jr-sm-l{display:block;margin:0 0 6px;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--stone-deep)}
+/* 16px text: phones do not zoom into the field */
+.jr-sm-in{display:block;width:100%;min-width:0;box-sizing:border-box;margin:0;font:inherit;font-family:var(--font-text);font-size:16px;line-height:1.3;text-align:center;color:var(--ink);background:transparent;border:0;border-bottom:1px solid rgba(34,30,25,.38);border-radius:0;padding:12px 0;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .25s,box-shadow .25s}
+.jr-sm-in::placeholder{color:var(--stone);opacity:1}
+.jr-sm-in:focus{border-bottom-color:var(--ink);box-shadow:0 1px 0 var(--ink)}
+.jr-sm-in[aria-invalid=true]{border-bottom-color:var(--jr-err);box-shadow:0 1px 0 var(--jr-err)}
+.jr-sm-go{display:inline-flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;min-height:48px;margin:22px 0 0;padding:0 24px;font:inherit;font-family:var(--font-text);font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;line-height:1.2;white-space:nowrap;color:var(--limestone);background:var(--ink);border:1px solid var(--ink);border-radius:2px;cursor:pointer;transition:background-color .3s,border-color .3s,opacity .3s}
+.jr-sm-go:hover{background:var(--graphite);border-color:var(--graphite)}
+.jr-sm-go[aria-busy=true]{opacity:.6;cursor:progress}
+/* spam trap (FormSubmit's _honey): out of sight and out of the tab order for people; FormSubmit drops submissions
+   where it is filled in */
+.jr-sm-hp{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;opacity:0;pointer-events:none}
+.jr-sm-err{min-height:1.45em;margin:8px 0 0;font-family:var(--font-text);font-size:13px;line-height:1.45;color:var(--jr-err)}
+.jr-sm-p{margin:6px 0 0;font-family:var(--font-text);font-size:12px;line-height:1.5;color:var(--stone)}
+.jr-sm-done .jr-sm-d{margin-bottom:26px}
+.jr-sm-done .jr-sm-go{margin-top:0}
+[dir=rtl] .jr-sm-kick,:lang(hi) .jr-sm-kick,:lang(ja) .jr-sm-kick,:lang(ko) .jr-sm-kick,:lang(zh) .jr-sm-kick,
+[dir=rtl] .jr-sm-l,:lang(hi) .jr-sm-l,:lang(ja) .jr-sm-l,:lang(ko) .jr-sm-l,:lang(zh) .jr-sm-l,
+[dir=rtl] .jr-sm-go,:lang(hi) .jr-sm-go,:lang(ja) .jr-sm-go,:lang(ko) .jr-sm-go,:lang(zh) .jr-sm-go{letter-spacing:0;text-transform:none}
+[dir=rtl] .jr-sm-kick,[dir=rtl] .jr-sm-l,:lang(hi) .jr-sm-kick,:lang(hi) .jr-sm-l{font-size:12.5px}
+[dir=rtl] .jr-sm-go,:lang(hi) .jr-sm-go,:lang(ja) .jr-sm-go,:lang(ko) .jr-sm-go,:lang(zh) .jr-sm-go{font-size:13.5px;font-weight:500}
+[dir=rtl] .jr-sm-h,:lang(hi) .jr-sm-h,:lang(ja) .jr-sm-h,:lang(ko) .jr-sm-h,:lang(zh) .jr-sm-h{letter-spacing:0;line-height:1.2}
+:lang(ja) .jr-sm-h{word-break:auto-phrase}
+@media(max-width:479px){
+  .jr-sm{padding:16px}
+  .jr-sm-dlg{padding:40px 22px 26px}
+}
+@media(prefers-reduced-motion:reduce){
+  .jr-sm-scrim,.jr-sm-dlg{transition:opacity .2s}
+  .jr-sm-dlg{transform:none}
+}
+
+/* ---------- clearance from the page scrollbar (Journal only) ----------
+   On desktop with a mouse (html.bq-sb) the site's custom scrollbar is drawn over the page at the right edge (rail 9px
+   in, 18px hit area), in both text directions. The scrollbar is physical-right in RTL too, so physical left/right here.
+   - pinned category bar: the scrollbar starts below it (the bar is 76px header + ~45px tall), and its lower hairline,
+     which widens to full width while pinned, stops short of the scrollbar;
+   - Latest rail: the scrolling area is inset slightly on both sides, more on the right, so cards and photographs are
+     clipped before the scrollbar; the first and last card keep their alignment with the content margin (the track's
+     padding gives back the inset), and card widths are unchanged.
+   Phones and tablets keep their native, transient indicator; there the rail gets a small even inset only. */
+.jr-latest{--jr-el:6px;--jr-er:6px}
+html.bq-sb .jr-latest{--jr-el:10px;--jr-er:30px}
+.jr-rail{margin-left:var(--jr-el);margin-right:var(--jr-er);scroll-padding-inline:0;scroll-padding-left:max(0px,calc(var(--margin) - var(--jr-el)));scroll-padding-right:max(0px,calc(var(--margin) - var(--jr-er)))}
+.jr-track{padding-left:max(0px,calc(var(--margin) - var(--jr-el)));padding-right:max(0px,calc(var(--margin) - var(--jr-er)))}
+html.bq-sb .bq-sb-bar{--sb-top:calc(76px + 48px + 18px)}
+html.bq-sb .jr-nav.is-stuck::after{right:30px}
+html.bq-sb .jr-nav-ul{padding-right:max(var(--margin),30px)}
