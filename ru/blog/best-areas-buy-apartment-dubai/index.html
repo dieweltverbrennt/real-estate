@@ -3567,11 +3567,11 @@
     <link rel="stylesheet" href="../../../css/related-cards.css" />
     <link
       rel="stylesheet"
-      href="../../../css/journal-article.css?v=20261121a"
+      href="../../../css/journal-article.css?v=20261121c"
     />
     <script src="../../../js/reveal.js" defer></script>
     <script src="../../../js/related-cards.js" defer></script>
-  </head>
+  <link rel="stylesheet" href="../../../css/journal-subscribe.css?v=20261121a"><script src="../../../js/journal.js?v=20261121h" defer></script></head>
   <body>
     <header class="site-header" id="header">
       <div class="grid">
@@ -3819,7 +3819,7 @@
       </div>
     </header>
     <main id="top">
-      <section class="bl-art">
+      <section class="bl-art has-sub">
         <div class="grid">
           <nav class="bl-bread" aria-label="Breadcrumb">
             <a href="../../">Главная</a><span>/</span
@@ -3838,7 +3838,7 @@
               образу жизни и инвестициям и даёт матрицу, чтобы соотнести район с
               вашей целью, — вместо того чтобы назначать одного победителя.
             </p>
-          </div>
+          </div><div class="bl-sub"><p class="jr-sub-line">Новые статьи — прямо на вашу почту</p><button type="button" class="jr-sub-btn" aria-haspopup="dialog" aria-controls="jr-sm">Подписаться</button></div>
           <div class="bl-d-fig">
             <picture
               ><source
@@ -4174,7 +4174,7 @@
           </div>
         </div>
       </section>
-    </main>
+    <div class="jr-sm" id="jr-sm" hidden><div class="jr-sm-scrim"></div><div class="jr-sm-dlg" role="dialog" aria-modal="true" aria-labelledby="jr-sm-h" aria-describedby="jr-sm-d" tabindex="-1"><button type="button" class="jr-sm-x" aria-label="Закрыть"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 2.5l11 11M13.5 2.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><div class="jr-sm-ask"><p class="jr-sm-kick">Журнал BITOQU</p><h2 class="jr-sm-h" id="jr-sm-h">Оставайтесь с журналом</h2><p class="jr-sm-d" id="jr-sm-d">Новые статьи, аналитика рынка и избранные материалы журнала BITOQU — по электронной почте.</p><form class="jr-sm-form" action="https://formsubmit.co/ajax/alikhanbitoqu@gmail.com" method="post" novalidate data-e1="Пожалуйста, введите адрес электронной почты." data-e2="Пожалуйста, введите корректный адрес, например name@example.com." data-fail="Не удалось отправить адрес. Проверьте подключение и попробуйте ещё раз." data-rate="Слишком много попыток. Подождите несколько минут и попробуйте снова."><label class="jr-sm-l" for="jr-sm-e">Адрес электронной почты</label><input class="jr-sm-in" id="jr-sm-e" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="name@example.com" aria-describedby="jr-sm-err jr-sm-p" required><div class="jr-sm-hp" aria-hidden="true"><label>Leave empty <input type="text" name="_honey" tabindex="-1" autocomplete="off"></label></div><button type="submit" class="jr-sm-go">Подписаться</button><p class="jr-sm-err" id="jr-sm-err" aria-live="polite"></p><p class="jr-sm-p" id="jr-sm-p">Мы будем использовать ваш адрес только для рассылки журнала.</p></form></div><div class="jr-sm-done" hidden><p class="jr-sm-kick">Журнал BITOQU</p><h2 class="jr-sm-h" id="jr-sm-oh" tabindex="-1">Спасибо</h2><p class="jr-sm-d" id="jr-sm-od">Ваш адрес получен. Новые материалы журнала будут приходить на вашу почту.</p><button type="button" class="jr-sm-go jr-sm-back">Вернуться к журналу</button></div></div></div></main>
     <footer class="site-footer">
       <div class="grid">
         <div class="ft-intro">

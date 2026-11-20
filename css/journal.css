@@ -15,19 +15,6 @@
 .jr-page .bl-hero .bl-h1{margin:0 auto;max-width:14em;font-size:clamp(28px,3.5vw,50px);line-height:1.05;letter-spacing:-.02em;text-wrap:balance}
 /* joined and syllabic scripts and CJK: no negative tracking (it would break letter joins or crowd the glyphs) */
 [dir=rtl] .jr-page .bl-hero .bl-h1,:lang(hi) .jr-page .bl-hero .bl-h1,:lang(ja) .jr-page .bl-hero .bl-h1,:lang(ko) .jr-page .bl-hero .bl-h1,:lang(zh) .jr-page .bl-hero .bl-h1{letter-spacing:0;line-height:1.08}
-/* cover line with Subscribe (visual only for now): the button is the site's solid ink button (as .jr-btn) at its most
-   compact - limestone text, 2px corners, about 30px tall; on narrow screens it wraps under the line */
-.jr-sub{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 18px;margin-top:clamp(14px,1.5vw,22px)}
-.jr-sub-line{margin:0;font-family:var(--font-text);font-size:14px;font-weight:400;line-height:1.4;color:var(--stone-deep)}
-.jr-sub-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;font:inherit;font-family:var(--font-text);font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;line-height:1;white-space:nowrap;color:var(--limestone);background:var(--ink);border:1px solid var(--ink);border-radius:2px;padding:9px 14px 8px;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .3s,border-color .3s}
-/* hover and pressed: the site's own button hover - the contact form's submit button (.submit: ink to bronze, a 0.3s
-   background fade), the closest existing button to this one; the 1px border follows the background. Hover only where
-   a real pointer hovers, so a tap on a phone does not leave it bronze; pressing shows the same bronze, so a touch gets
-   the same feedback a pointer gets on hover. */
-@media(hover:hover){.jr-sub-btn:hover{background:var(--bronze);border-color:var(--bronze)}}
-.jr-sub-btn:active{background:var(--bronze);border-color:var(--bronze)}
-.jr-sub-btn:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
-[dir=rtl] .jr-sub-btn,:lang(hi) .jr-sub-btn,:lang(ja) .jr-sub-btn,:lang(ko) .jr-sub-btn,:lang(zh) .jr-sub-btn{letter-spacing:0;text-transform:none;font-size:12.5px;font-weight:500}
 
 /* ---------- shared pieces ---------- */
 .jr-fig{position:relative;overflow:hidden;margin:0;background:var(--sand)}
@@ -265,60 +252,6 @@ a:hover .jr-cta::after{transform:translateX(5px)}
   .jr-fig img,.jr-tab::after,.jr-prog i{transition:none}
   a:hover .jr-fig img{transform:none}
   .jr-res-grid>*{animation:none}
-}
-
-/* ---------- Subscribe dialog (#jr-sm, js/journal.js) ----------
-   A compact centred card on one axis: a short bronze rule, the Journal's name as a small kicker, the display-serif
-   heading, the description, an underlined field, a full-width solid ink button, the privacy note. The page behind is
-   dimmed with the site's ink. On phones the card keeps its shape with a 16px margin. */
-html.jr-sm-lock{overflow:hidden;scrollbar-gutter:stable}
-.jr-sm{--jr-err:#9a3a2a;position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
-.jr-sm[hidden]{display:none}
-.jr-sm-scrim{position:absolute;inset:0;background:rgba(34,30,25,.46);opacity:0;transition:opacity .35s ease}
-.jr-sm.is-open .jr-sm-scrim{opacity:1}
-.jr-sm-dlg{position:relative;box-sizing:border-box;width:min(460px,100%);max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow:auto;overscroll-behavior:contain;padding:clamp(40px,4.4vw,52px) clamp(24px,3.6vw,46px) clamp(28px,3vw,36px);text-align:center;background:var(--limestone);color:var(--ink);box-shadow:0 30px 80px -24px rgba(34,30,25,.5);opacity:0;transform:translateY(14px);transition:opacity .35s ease,transform .5s cubic-bezier(.2,.7,.2,1)}
-.jr-sm.is-open .jr-sm-dlg{opacity:1;transform:none}
-.jr-sm-dlg:focus{outline:none}
-.jr-sm-x{position:absolute;top:10px;inset-inline-end:10px;z-index:1;width:40px;height:40px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;color:var(--ink);cursor:pointer;transition:background-color .25s}
-.jr-sm-x:hover{background:rgba(34,30,25,.07)}
-.jr-sm-x svg{width:15px;height:15px}
-.jr-sm-x:focus-visible,.jr-sm-go:focus-visible{outline:2px solid var(--bronze);outline-offset:3px}
-.jr-sm-kick{margin:0;padding-inline:40px;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--bronze-text)}
-.jr-sm-kick::before{content:"";display:block;width:28px;height:1px;margin:0 auto 18px;background:var(--bronze)}
-.jr-sm-h{margin:12px 0 0;font-family:var(--font-display);font-weight:300;font-size:clamp(27px,2.4vw,32px);line-height:1.08;letter-spacing:-.012em;color:var(--ink);text-wrap:balance}
-.jr-sm-h:focus{outline:none}
-.jr-sm-d{max-width:30em;margin:14px auto 0;font-family:var(--font-text);font-size:15px;line-height:1.55;color:var(--stone-deep);text-wrap:pretty}
-.jr-sm-form{margin:28px 0 0}
-.jr-sm-l{display:block;margin:0 0 6px;font-family:var(--font-text);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--stone-deep)}
-/* 16px text: phones do not zoom into the field */
-.jr-sm-in{display:block;width:100%;min-width:0;box-sizing:border-box;margin:0;font:inherit;font-family:var(--font-text);font-size:16px;line-height:1.3;text-align:center;color:var(--ink);background:transparent;border:0;border-bottom:1px solid rgba(34,30,25,.38);border-radius:0;padding:12px 0;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .25s,box-shadow .25s}
-.jr-sm-in::placeholder{color:var(--stone);opacity:1}
-.jr-sm-in:focus{border-bottom-color:var(--ink);box-shadow:0 1px 0 var(--ink)}
-.jr-sm-in[aria-invalid=true]{border-bottom-color:var(--jr-err);box-shadow:0 1px 0 var(--jr-err)}
-.jr-sm-go{display:inline-flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;min-height:48px;margin:22px 0 0;padding:0 24px;font:inherit;font-family:var(--font-text);font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;line-height:1.2;white-space:nowrap;color:var(--limestone);background:var(--ink);border:1px solid var(--ink);border-radius:2px;cursor:pointer;transition:background-color .3s,border-color .3s,opacity .3s}
-.jr-sm-go:hover{background:var(--graphite);border-color:var(--graphite)}
-.jr-sm-go[aria-busy=true]{opacity:.6;cursor:progress}
-/* spam trap (FormSubmit's _honey): out of sight and out of the tab order for people; FormSubmit drops submissions
-   where it is filled in */
-.jr-sm-hp{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;opacity:0;pointer-events:none}
-.jr-sm-err{min-height:1.45em;margin:8px 0 0;font-family:var(--font-text);font-size:13px;line-height:1.45;color:var(--jr-err)}
-.jr-sm-p{margin:6px 0 0;font-family:var(--font-text);font-size:12px;line-height:1.5;color:var(--stone)}
-.jr-sm-done .jr-sm-d{margin-bottom:26px}
-.jr-sm-done .jr-sm-go{margin-top:0}
-[dir=rtl] .jr-sm-kick,:lang(hi) .jr-sm-kick,:lang(ja) .jr-sm-kick,:lang(ko) .jr-sm-kick,:lang(zh) .jr-sm-kick,
-[dir=rtl] .jr-sm-l,:lang(hi) .jr-sm-l,:lang(ja) .jr-sm-l,:lang(ko) .jr-sm-l,:lang(zh) .jr-sm-l,
-[dir=rtl] .jr-sm-go,:lang(hi) .jr-sm-go,:lang(ja) .jr-sm-go,:lang(ko) .jr-sm-go,:lang(zh) .jr-sm-go{letter-spacing:0;text-transform:none}
-[dir=rtl] .jr-sm-kick,[dir=rtl] .jr-sm-l,:lang(hi) .jr-sm-kick,:lang(hi) .jr-sm-l{font-size:12.5px}
-[dir=rtl] .jr-sm-go,:lang(hi) .jr-sm-go,:lang(ja) .jr-sm-go,:lang(ko) .jr-sm-go,:lang(zh) .jr-sm-go{font-size:13.5px;font-weight:500}
-[dir=rtl] .jr-sm-h,:lang(hi) .jr-sm-h,:lang(ja) .jr-sm-h,:lang(ko) .jr-sm-h,:lang(zh) .jr-sm-h{letter-spacing:0;line-height:1.2}
-:lang(ja) .jr-sm-h{word-break:auto-phrase}
-@media(max-width:479px){
-  .jr-sm{padding:16px}
-  .jr-sm-dlg{padding:40px 22px 26px}
-}
-@media(prefers-reduced-motion:reduce){
-  .jr-sm-scrim,.jr-sm-dlg{transition:opacity .2s}
-  .jr-sm-dlg{transform:none}
 }
 
 /* ---------- clearance from the page scrollbar (Journal only) ----------

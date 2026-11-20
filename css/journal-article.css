@@ -27,6 +27,27 @@
   .bl-d-fig img{width:100%;height:100%;object-fit:cover}
 }
 
+/* Subscribe: the Journal masthead's line and button (css/journal-subscribe.css .jr-sub-line / .jr-sub-btn) and its
+   dialog (#jr-sm, js/journal.js). In the markup it follows the lede; on desktops it moves up to the end of the
+   breadcrumb row - the header's utility line, clear of the title - and on tablets and phones it stays a quiet line
+   under the lede, before the photograph. Mirrored by the grid in right-to-left languages. Pages carrying it mark their
+   article section .has-sub. */
+.bl-sub{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:clamp(18px,2.4vw,24px)}
+.bl-sub .jr-sub-line{font-size:13px;letter-spacing:.01em;color:var(--stone)}
+/* Desktop: the line takes only its own width at the end of the breadcrumb row; the breadcrumb keeps its full width
+   (both are content-sized, so neither wraps). French, Spanish and Italian have the longest line and breadcrumb: below
+   1100px the two together exceed the row by a few pixels, so there the line stays under the lede as on tablets. */
+@media(min-width:1024px){
+  .bl-art.has-sub .bl-bread{grid-row:1;align-self:center}
+  .bl-art.has-sub .bl-sub{grid-row:1;grid-column:1/-1;justify-self:end;flex-wrap:nowrap;margin-top:0}
+  .bl-art.has-sub .bl-sub .jr-sub-line{white-space:nowrap}
+}
+@media(min-width:1024px) and (max-width:1099px){
+  :lang(fr) .bl-art.has-sub .bl-bread,:lang(es) .bl-art.has-sub .bl-bread,:lang(it) .bl-art.has-sub .bl-bread{grid-row:auto}
+  :lang(fr) .bl-art.has-sub .bl-sub,:lang(es) .bl-art.has-sub .bl-sub,:lang(it) .bl-art.has-sub .bl-sub{grid-row:auto;justify-self:stretch;flex-wrap:wrap;margin-top:clamp(18px,2.4vw,24px)}
+  :lang(fr) .bl-art.has-sub .bl-sub .jr-sub-line,:lang(es) .bl-art.has-sub .bl-sub .jr-sub-line,:lang(it) .bl-art.has-sub .bl-sub .jr-sub-line{white-space:normal}
+}
+
 /* Related reading: the shared card band; the heading as on the Journal ("Latest News") */
 .bl-rel-sec .bl-rel-h{grid-column:1/-1;margin:0 0 clamp(24px,2.6vw,36px);padding-top:clamp(24px,2.4vw,34px);border-top:1px solid var(--rule);font-family:var(--font-display);font-weight:300;font-size:clamp(26px,2.4vw,36px);line-height:1.1;letter-spacing:-.012em;text-transform:none;color:var(--ink)}
 [dir=rtl] .bl-rel-sec .bl-rel-h,:lang(hi) .bl-rel-sec .bl-rel-h,:lang(ja) .bl-rel-sec .bl-rel-h,:lang(ko) .bl-rel-sec .bl-rel-h,:lang(zh) .bl-rel-sec .bl-rel-h{letter-spacing:0;line-height:1.25}
