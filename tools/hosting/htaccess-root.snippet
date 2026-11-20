@@ -1,0 +1,32 @@
+# BEGIN BITOQU (paste into public_html/.htaccess - see tools/hosting/README.md)
+
+# Missing pages under / answer with HTTP 404 and the English "page not found" page.
+# (Each language folder has its own .htaccess pointing to its own /<lang>/404.html.)
+ErrorDocument 404 /404.html
+
+# One address per page: https://bitoqu.com/... (no www) and folder URLs without "index.html".
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^www\.bitoqu\.com$ [NC]
+  RewriteRule ^(.*)$ https://bitoqu.com/$1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/((?:[^\s?]*/)?)index\.html[\s?]
+  RewriteRule ^ /%1 [R=301,L]
+</IfModule>
+
+# Security headers (no Content-Security-Policy beyond the host's own: the pages rely on inline scripts and styles).
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+</IfModule>
+
+# Browser caching for images, video and fonts (30 days). HTML, CSS and JS are left to revalidation.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(avif|webp|jpe?g|png|gif|svg|ico|mp4|webm|woff2?)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+</IfModule>
+
+# END BITOQU

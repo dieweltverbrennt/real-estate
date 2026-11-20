@@ -168,7 +168,9 @@
     });
     // #category, #page-2 or #category/page-2
     function fromHash(e, quiet) {
-      var h = decodeURIComponent(location.hash.slice(1)), n = 1, m = /(?:^|\/)page-(\d+)$/.exec(h);
+      var h = location.hash.slice(1), n = 1, m;
+      try { h = decodeURIComponent(h); } catch (x) { h = ''; }   // a malformed %-sequence must not stop the page's setup
+      m = /(?:^|\/)page-(\d+)$/.exec(h);
       if (m) { n = +m[1]; h = h.slice(0, m.index); }
       apply(h, false, n, false, quiet);
     }

@@ -87,7 +87,6 @@ a:hover .jr-cta::after{transform:translateX(5px)}
   .jr-nav-ul{gap:clamp(16px,1.5vw,32px)}
   .jr-tab{font-size:11.5px;letter-spacing:.08em}
 }
-html[data-journal] .jr-nav{display:none}
 
 /* ---------- A. Featured Story ---------- */
 .jr-feat-sec{padding:clamp(28px,2.8vw,44px) 0 var(--jr-sp)}
